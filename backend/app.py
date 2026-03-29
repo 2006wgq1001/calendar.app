@@ -12,6 +12,7 @@ from collections import Counter
 from urllib import request as urlrequest
 from urllib.error import URLError, HTTPError
 import threading
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 
 def _split_env_csv(name, default_values):
@@ -68,10 +69,65 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
+auth_serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+AUTH_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+
+
+def _make_auth_token(user):
+    return auth_serializer.dumps({'uid': user.id}, salt='calendar-auth')
+
+
+def _get_user_from_auth_token(token):
+    try:
+        payload = auth_serializer.loads(
+            token,
+            salt='calendar-auth',
+            max_age=AUTH_TOKEN_MAX_AGE_SECONDS,
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+
+    uid = payload.get('uid') if isinstance(payload, dict) else None
+    if not uid:
+        return None
+    return User.query.get(uid)
+
+
+def _get_bearer_token_from_request():
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.lower().startswith('bearer '):
+        return ''
+    return auth_header.split(' ', 1)[1].strip()
+
+
+@app.before_request
+def hydrate_session_from_bearer_token():
+    if request.path.startswith('/api/'):
+        if session.get('user'):
+            return
+
+        token = _get_bearer_token_from_request()
+        if not token:
+            return
+
+        user = _get_user_from_auth_token(token)
+        if not user:
+            return
+
+        session['user'] = {'id': user.id, 'username': user.username, 'name': user.name}
+
 
 def current_user_id():
     user = session.get('user')
-    return user.get('id') if user else None
+    if user:
+        return user.get('id')
+
+    token = _get_bearer_token_from_request()
+    if not token:
+        return None
+
+    auth_user = _get_user_from_auth_token(token)
+    return auth_user.id if auth_user else None
 
 
 def is_team_member(team_id, user_id):
@@ -328,7 +384,8 @@ def login():
     user = User.query.filter_by(username=username).first()
     if user and user.password == password:
         session['user'] = {'id': user.id, 'username': user.username, 'name': user.name}
-        return jsonify({'success': True, 'user': user.to_dict(), 'message': '登录成功'})
+        token = _make_auth_token(user)
+        return jsonify({'success': True, 'user': user.to_dict(), 'token': token, 'message': '登录成功'})
     else:
         return jsonify({'success': False, 'message': '用户名或密码错误'}), 401
 
@@ -341,9 +398,17 @@ def check_auth():
         if not user:
             session.pop('user', None)
             return jsonify({'error': '用户不存在'}), 401
-        return jsonify({'user': user.to_dict()})
-    else:
-        return jsonify({'error': '未登录'}), 401
+        token = _make_auth_token(user)
+        return jsonify({'user': user.to_dict(), 'token': token})
+
+    token = _get_bearer_token_from_request()
+    if token:
+        user = _get_user_from_auth_token(token)
+        if user:
+            session['user'] = {'id': user.id, 'username': user.username, 'name': user.name}
+            return jsonify({'user': user.to_dict(), 'token': token})
+
+    return jsonify({'error': '未登录'}), 401
 
 @app.route('/api/profile', methods=['GET'])
 def get_profile():
@@ -407,7 +472,8 @@ def register():
         db.session.commit()
 
         session['user'] = {'id': new_user.id, 'username': new_user.username, 'name': new_user.name}
-        return jsonify({'success': True, 'user': new_user.to_dict(), 'message': '注册成功'})
+        token = _make_auth_token(new_user)
+        return jsonify({'success': True, 'user': new_user.to_dict(), 'token': token, 'message': '注册成功'})
     except Exception as exc:
         db.session.rollback()
         # log exception

@@ -25,11 +25,14 @@ IS_PRODUCTION = (
     (os.environ.get('APP_ENV') or '').lower() == 'production'
     or (os.environ.get('FLASK_ENV') or '').lower() == 'production'
     or (os.environ.get('RENDER') or '').lower() == 'true'
+    or (os.environ.get('RAILWAY_ENVIRONMENT') or '').lower() == 'production'
+    or bool(os.environ.get('RAILWAY_PROJECT_ID'))
 )
 
 DEFAULT_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://2006wgq1001.github.io',
 ]
 
 ALLOWED_ORIGINS = _split_env_csv('CORS_ORIGINS', DEFAULT_ORIGINS)

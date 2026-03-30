@@ -73,6 +73,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 def _resolve_frontend_build_dir():
     candidates = [
         os.path.join(basedir, 'frontend_build'),
+        os.path.abspath(os.path.join(basedir, '..', 'frontend_bundle')),
         os.path.abspath(os.path.join(basedir, '..', 'frontend_gh_publish')),
         os.path.abspath(os.path.join(basedir, '..', 'frontend', 'build')),
     ]

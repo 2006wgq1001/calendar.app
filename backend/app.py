@@ -83,7 +83,8 @@ def _resolve_database_uri():
             return uri.replace('postgresql://', 'postgresql+psycopg://', 1)
         return uri
 
-    return 'sqlite:///' + os.path.join(basedir, 'database.db')
+    sqlite_path = (os.environ.get('SQLITE_PATH') or '').strip() or os.path.join(basedir, 'database.db')
+    return 'sqlite:///' + sqlite_path
 
 
 app.config['SQLALCHEMY_DATABASE_URI'] = _resolve_database_uri()

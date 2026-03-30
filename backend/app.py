@@ -64,8 +64,31 @@ Session(app)
 
 # 配置数据库
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
+
+
+def _resolve_database_uri():
+    # Prefer managed cloud database in production.
+    candidates = [
+        os.environ.get('DATABASE_URL', '').strip(),
+        os.environ.get('POSTGRES_URL', '').strip(),
+        os.environ.get('RAILWAY_DATABASE_URL', '').strip(),
+    ]
+
+    for uri in candidates:
+        if not uri:
+            continue
+        if uri.startswith('postgres://'):
+            return uri.replace('postgres://', 'postgresql+psycopg://', 1)
+        if uri.startswith('postgresql://'):
+            return uri.replace('postgresql://', 'postgresql+psycopg://', 1)
+        return uri
+
+    return 'sqlite:///' + os.path.join(basedir, 'database.db')
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = _resolve_database_uri()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 
 db.init_app(app)
 

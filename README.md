@@ -102,6 +102,20 @@
 5. 部署成功后得到后端域名，例如：
    https://your-backend-domain.onrender.com
 
+### 后端部署到 Railway（推荐生产配置）
+
+1. 确保服务根目录是仓库根目录 `/`，并使用当前仓库内的 Dockerfile/railway 配置部署。
+2. 至少配置以下环境变量：
+   - APP_ENV=production
+   - SECRET_KEY=高强度随机字符串（至少 32 位）
+   - CORS_ORIGINS=https://你的前端域名
+3. 为避免重启后数据丢失，创建 Railway PostgreSQL 插件（或外部 PostgreSQL），并设置：
+   - DATABASE_URL=<你的 PostgreSQL 连接串>
+4. 当前后端会优先使用 `DATABASE_URL`（支持 `postgres://` 与 `postgresql://` 自动兼容为 `postgresql+psycopg://`），无该变量时才回退 SQLite。
+5. 部署后建议验证：
+   - `GET /api/test` 返回 200
+   - 新用户注册后重启服务，再次登录仍可成功（验证数据持久化）
+
 ### 前端部署到 Vercel
 
 1. 导入仓库后，将 Frontend Root 设置为 frontend。

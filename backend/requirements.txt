@@ -6,4 +6,5 @@ Flask-SQLAlchemy==3.0.5
 SQLAlchemy==2.0.48
 eventlet==0.36.1
 gunicorn==22.0.0
+psycopg[binary]==3.2.6
 waitress==2.1.2

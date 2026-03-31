@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: calendar-backend
+    env: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --worker-class eventlet -w 1 app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://your-frontend-domain.vercel.app

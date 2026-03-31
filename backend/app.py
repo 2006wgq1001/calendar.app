@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
 from flask_session import Session
 from models import db, Event, User, Team, TeamMember, Task, Contact, Post, PostComment
@@ -54,6 +54,7 @@ Session(app)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+FRONTEND_BUILD_DIR = os.path.abspath(os.path.join(basedir, '..', 'frontend_bundle'))
 
 db.init_app(app)
 
@@ -319,7 +320,26 @@ with app.app_context():
 # 测试路由
 @app.route('/', methods=['GET'])
 def home():
+    index_file = os.path.join(FRONTEND_BUILD_DIR, 'index.html')
+    if os.path.exists(index_file):
+        return send_from_directory(FRONTEND_BUILD_DIR, 'index.html')
     return jsonify({"message": "Calendar API is running", "status": "ok"})
+
+
+@app.route('/<path:path>', methods=['GET'])
+def frontend_spa_fallback(path):
+    if path.startswith('api/'):
+        return jsonify({'error': 'Not Found'}), 404
+
+    asset_path = os.path.join(FRONTEND_BUILD_DIR, path)
+    if os.path.exists(asset_path) and os.path.isfile(asset_path):
+        return send_from_directory(FRONTEND_BUILD_DIR, path)
+
+    index_file = os.path.join(FRONTEND_BUILD_DIR, 'index.html')
+    if os.path.exists(index_file):
+        return send_from_directory(FRONTEND_BUILD_DIR, 'index.html')
+
+    return jsonify({'error': 'Not Found'}), 404
 
 
 @app.route('/api/test', methods=['GET'])

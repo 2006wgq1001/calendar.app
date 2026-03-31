@@ -36,7 +36,7 @@ DEFAULT_ORIGINS = [
 
 ALLOWED_ORIGINS = _split_env_csv('CORS_ORIGINS', DEFAULT_ORIGINS)
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)
 CORS(app, 
     origins=ALLOWED_ORIGINS,
      supports_credentials=True, 
@@ -324,6 +324,12 @@ def home():
     if os.path.exists(index_file):
         return send_from_directory(FRONTEND_BUILD_DIR, 'index.html')
     return jsonify({"message": "Calendar API is running", "status": "ok"})
+
+
+@app.route('/static/<path:filename>', methods=['GET'])
+def frontend_static_files(filename):
+    static_dir = os.path.join(FRONTEND_BUILD_DIR, 'static')
+    return send_from_directory(static_dir, filename)
 
 
 @app.route('/<path:path>', methods=['GET'])

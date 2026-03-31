@@ -1,7 +1,6 @@
-from flask import Flask, request, jsonify, session, send_from_directory, redirect
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from flask_session import Session
-from flask_socketio import SocketIO, emit, join_room, leave_room
 from models import db, Event, User, Team, TeamMember, Task, Contact, Post, PostComment
 from datetime import datetime
 import sqlite3
@@ -11,7 +10,6 @@ import json
 from collections import Counter
 from urllib import request as urlrequest
 from urllib.error import URLError, HTTPError
-import threading
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 
@@ -36,10 +34,6 @@ DEFAULT_ORIGINS = [
     'https://2006wgq1001.github.io',
 ]
 
-railway_public_domain = (os.environ.get('RAILWAY_PUBLIC_DOMAIN') or '').strip()
-if railway_public_domain:
-    DEFAULT_ORIGINS.append(f'https://{railway_public_domain}')
-
 ALLOWED_ORIGINS = _split_env_csv('CORS_ORIGINS', DEFAULT_ORIGINS)
 
 app = Flask(__name__)
@@ -48,16 +42,6 @@ CORS(app,
      supports_credentials=True, 
      allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-
-socketio = SocketIO(
-    app,
-    cors_allowed_origins=ALLOWED_ORIGINS,
-    manage_session=False,
-)
-
-room_members = {}
-socket_room_map = {}
-room_lock = threading.Lock()
 
 # 配置会话
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
@@ -68,57 +52,8 @@ Session(app)
 
 # 配置数据库
 basedir = os.path.abspath(os.path.dirname(__file__))
-
-
-def _resolve_frontend_build_dir():
-    candidates = [
-        os.path.join(basedir, 'frontend_build'),
-        os.path.abspath(os.path.join(basedir, '..', 'frontend_bundle')),
-        os.path.abspath(os.path.join(basedir, '..', 'frontend_gh_publish')),
-        os.path.abspath(os.path.join(basedir, '..', 'frontend', 'build')),
-    ]
-    for path in candidates:
-        if os.path.isdir(path):
-            return path
-    return candidates[0]
-
-
-FRONTEND_BUILD_DIR = _resolve_frontend_build_dir()
-FRONTEND_INDEX_FILE = os.path.join(FRONTEND_BUILD_DIR, 'index.html')
-
-
-def _resolve_database_uri():
-    # Prefer managed cloud database in production.
-    candidates = [
-        os.environ.get('DATABASE_URL', '').strip(),
-        os.environ.get('POSTGRES_URL', '').strip(),
-        os.environ.get('RAILWAY_DATABASE_URL', '').strip(),
-    ]
-
-    for uri in candidates:
-        if not uri:
-            continue
-        if uri.startswith('postgres://'):
-            return uri.replace('postgres://', 'postgresql+psycopg://', 1)
-        if uri.startswith('postgresql://'):
-            return uri.replace('postgresql://', 'postgresql+psycopg://', 1)
-        return uri
-
-    sqlite_path = (os.environ.get('SQLITE_PATH') or '').strip() or os.path.join(basedir, 'database.db')
-    return 'sqlite:///' + sqlite_path
-
-
-def _get_sqlite_db_path():
-    uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-    prefix = 'sqlite:///'
-    if uri.startswith(prefix):
-        return uri[len(prefix):]
-    return None
-
-
-app.config['SQLALCHEMY_DATABASE_URI'] = _resolve_database_uri()
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 
 db.init_app(app)
 
@@ -187,36 +122,7 @@ def is_team_member(team_id, user_id):
     return TeamMember.query.filter_by(team_id=team_id, user_id=user_id).first() is not None
 
 
-def _socket_user_name():
-    user = session.get('user')
-    if isinstance(user, dict):
-        return user.get('name') or user.get('username') or '匿名用户'
-    return '匿名用户'
 
-
-def _socket_user_id():
-    user = session.get('user')
-    if isinstance(user, dict):
-        return user.get('id')
-    return None
-
-
-def _remove_socket_from_room(socket_id, room_id=None):
-    with room_lock:
-        target_room_id = room_id or socket_room_map.get(socket_id)
-        if not target_room_id:
-            return None
-
-        members = room_members.get(target_room_id, {})
-        members.pop(socket_id, None)
-
-        if members:
-            room_members[target_room_id] = members
-        else:
-            room_members.pop(target_room_id, None)
-
-        socket_room_map.pop(socket_id, None)
-        return target_room_id
 
 
 def _split_meeting_sentences(text):
@@ -365,9 +271,7 @@ def _normalize_action_items(raw_items, fallback_summary=''):
 
 def ensure_legacy_schema():
     """补齐旧版 SQLite 数据库缺失字段，避免升级后登录/注册报错。"""
-    db_path = _get_sqlite_db_path()
-    if not db_path:
-        return
+    db_path = os.path.join(basedir, 'database.db')
     if not os.path.exists(db_path):
         return
 
@@ -400,10 +304,9 @@ with app.app_context():
         print("数据库初始化出错：", e)
         # sqlite 常见的损坏问题，尝试删除文件并重新创建
         if 'disk image is malformed' in str(e):
-            db_path = _get_sqlite_db_path()
+            db_path = os.path.join(basedir, 'database.db')
             try:
-                if db_path:
-                    os.remove(db_path)
+                os.remove(db_path)
                 print("损坏的数据库已删除，重新创建中…")
                 db.create_all()
                 print("数据库已重新创建。")
@@ -416,8 +319,6 @@ with app.app_context():
 # 测试路由
 @app.route('/', methods=['GET'])
 def home():
-    if os.path.exists(FRONTEND_INDEX_FILE):
-        return redirect('/calendar-app/')
     return jsonify({"message": "Calendar API is running", "status": "ok"})
 
 
@@ -1238,112 +1139,11 @@ def assistant_meeting_tasks():
     })
 
 
-@socketio.on('join-room')
-def on_join_room(data):
-    payload = data or {}
-    room_id = str(payload.get('roomId') or '').strip()
-    if not room_id:
-        emit('room-error', {'message': '房间号不能为空'})
-        return
 
-    socket_id = request.sid
-
-    # 同一个连接切换房间时，先离开旧房间
-    old_room_id = socket_room_map.get(socket_id)
-    if old_room_id and old_room_id != room_id:
-        leave_room(old_room_id)
-        removed_room = _remove_socket_from_room(socket_id, old_room_id)
-        if removed_room:
-            emit('user-left', {'socketId': socket_id}, room=removed_room, include_self=False)
-
-    with room_lock:
-        members = room_members.get(room_id, {})
-        existing_users = [
-            {
-                'socketId': sid,
-                'name': meta.get('name', '成员'),
-                'userId': meta.get('user_id')
-            }
-            for sid, meta in members.items() if sid != socket_id
-        ]
-        members[socket_id] = {
-            'name': _socket_user_name(),
-            'user_id': _socket_user_id()
-        }
-        room_members[room_id] = members
-        socket_room_map[socket_id] = room_id
-
-    join_room(room_id)
-    emit('room-users', {'roomId': room_id, 'users': existing_users})
-    emit(
-        'user-joined',
-        {
-            'socketId': socket_id,
-            'name': _socket_user_name(),
-            'userId': _socket_user_id()
-        },
-        room=room_id,
-        include_self=False
-    )
-
-
-@socketio.on('leave-room')
-def on_leave_room(data):
-    payload = data or {}
-    room_id = str(payload.get('roomId') or '').strip() or socket_room_map.get(request.sid)
-    if not room_id:
-        return
-
-    leave_room(room_id)
-    removed_room = _remove_socket_from_room(request.sid, room_id)
-    if removed_room:
-        emit('user-left', {'socketId': request.sid}, room=removed_room, include_self=False)
-
-
-@socketio.on('signal')
-def on_signal(data):
-    payload = data or {}
-    target_id = payload.get('targetId')
-    signal = payload.get('signal')
-    if not target_id or not signal:
-        return
-
-    emit('signal', {'from': request.sid, 'signal': signal}, room=target_id)
-
-
-@socketio.on('disconnect')
-def on_disconnect():
-    room_id = _remove_socket_from_room(request.sid)
-    if room_id:
-        emit('user-left', {'socketId': request.sid}, room=room_id, include_self=False)
-
-
-@app.route('/<path:path>', methods=['GET'])
-def serve_frontend(path):
-    if path.startswith('api/') or path.startswith('socket.io'):
-        return jsonify({'error': 'Not Found'}), 404
-
-    if not os.path.exists(FRONTEND_INDEX_FILE):
-        return jsonify({'error': 'Frontend build not found'}), 404
-
-    normalized_path = path
-    if normalized_path == 'calendar-app':
-        normalized_path = ''
-    elif normalized_path.startswith('calendar-app/'):
-        normalized_path = normalized_path[len('calendar-app/'):]
-
-    if normalized_path in ['', '/']:
-        return send_from_directory(FRONTEND_BUILD_DIR, 'index.html')
-
-    target_path = os.path.join(FRONTEND_BUILD_DIR, normalized_path)
-    if os.path.isfile(target_path):
-        return send_from_directory(FRONTEND_BUILD_DIR, normalized_path)
-
-    return send_from_directory(FRONTEND_BUILD_DIR, 'index.html')
 
 
 if __name__ == '__main__':
     print("启动日历API服务器...")
     print("访问 http://localhost:5000 测试API")
     print("访问 http://localhost:5000/api/events 获取事件")
-    socketio.run(app, debug=True, port=5000, host='0.0.0.0', allow_unsafe_werkzeug=True)
+    app.run(debug=True, port=5000, host='0.0.0.0')

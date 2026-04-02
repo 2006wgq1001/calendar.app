@@ -76,8 +76,8 @@ const Login = ({ onLogin }) => {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1>📅 日历应用</h1>
-          <p>请登录以继续</p>
+          <h1>灵境工坊 · 协作中枢</h1>
+          <p>登录后继续使用日历、会议、远程操控和通讯录模块</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">

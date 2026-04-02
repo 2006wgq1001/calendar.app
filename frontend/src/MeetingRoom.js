@@ -10,6 +10,30 @@ const SIGNAL_URL =
       ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'))
     : window.location.origin);
 
+const RTC_ICE_SERVERS = (() => {
+  const defaults = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+
+  const turnUrl = (process.env.REACT_APP_TURN_URL || '').trim();
+  const turnUsername = (process.env.REACT_APP_TURN_USERNAME || '').trim();
+  const turnCredential = (process.env.REACT_APP_TURN_CREDENTIAL || '').trim();
+
+  if (!turnUrl) {
+    return defaults;
+  }
+
+  return [
+    ...defaults,
+    {
+      urls: turnUrl,
+      username: turnUsername,
+      credential: turnCredential,
+    },
+  ];
+})();
+
 function RemoteVideo({ stream, label }) {
   const videoRef = useRef(null);
 
@@ -56,6 +80,8 @@ const MeetingRoom = ({ user }) => {
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
   const peerConnectionsRef = useRef({});
+  const makingOfferRef = useRef({});
+  const pendingCandidatesRef = useRef({});
   const screenStreamRef = useRef(null);
   const isScreenSharingRef = useRef(false);
   const recognitionRef = useRef(null);
@@ -266,7 +292,6 @@ const MeetingRoom = ({ user }) => {
       socketRef.current.on('user-joined', async ({ socketId, userId, name }) => {
         setStatus('有新成员加入房间');
         setMeetingMembers((prev) => mergeMembers(prev, [{ socketId, userId, name }]));
-        await createOfferToPeer(socketId);
       });
 
       socketRef.current.on('signal', async ({ from, signal }) => {
@@ -307,7 +332,7 @@ const MeetingRoom = ({ user }) => {
     const localStream = await getLocalStream();
 
     const peer = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: RTC_ICE_SERVERS,
     });
 
     localStream.getTracks().forEach((track) => {
@@ -357,13 +382,54 @@ const MeetingRoom = ({ user }) => {
     const socket = socketRef.current;
     const peer = await createPeerConnection(peerId);
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
+    if (!socket || !peer || makingOfferRef.current[peerId]) {
+      return;
+    }
 
-    socket.emit('signal', {
-      targetId: peerId,
-      signal: { type: 'offer', sdp: offer.sdp }
-    });
+    if (peer.signalingState !== 'stable') {
+      return;
+    }
+
+    makingOfferRef.current[peerId] = true;
+    try {
+      const offer = await peer.createOffer();
+      if (peer.signalingState !== 'stable') {
+        return;
+      }
+
+      await peer.setLocalDescription(offer);
+
+      socket.emit('signal', {
+        targetId: peerId,
+        signal: { type: 'offer', sdp: offer.sdp }
+      });
+    } catch (error) {
+      console.error('Create offer failed:', error);
+    } finally {
+      makingOfferRef.current[peerId] = false;
+    }
+  };
+
+  const renegotiateAllPeers = async () => {
+    const peerIds = Object.keys(peerConnectionsRef.current);
+    for (const peerId of peerIds) {
+      await createOfferToPeer(peerId);
+    }
+  };
+
+  const replaceOutgoingVideoTrack = async (nextVideoTrack) => {
+    const peers = Object.values(peerConnectionsRef.current);
+    for (const peer of peers) {
+      const sender = peer.getSenders().find((item) => item.track && item.track.kind === 'video');
+      if (!sender) {
+        continue;
+      }
+      try {
+        await sender.replaceTrack(nextVideoTrack || null);
+      } catch (error) {
+        console.error('Replace outgoing video track failed:', error);
+      }
+    }
   };
 
   const handleSignal = async (peerId, signal) => {
@@ -371,9 +437,26 @@ const MeetingRoom = ({ user }) => {
     const peer = await createPeerConnection(peerId);
 
     if (signal.type === 'offer') {
+      try {
+        if (peer.signalingState !== 'stable') {
+          await peer.setLocalDescription({ type: 'rollback' });
+        }
+      } catch (error) {
+        console.error('Rollback signaling state failed:', error);
+      }
+
       await peer.setRemoteDescription(
         new RTCSessionDescription({ type: 'offer', sdp: signal.sdp })
       );
+      const queuedCandidates = pendingCandidatesRef.current[peerId] || [];
+      for (const candidate of queuedCandidates) {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          console.error('Queued ICE candidate error:', error);
+        }
+      }
+      delete pendingCandidatesRef.current[peerId];
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
       socket.emit('signal', {
@@ -387,10 +470,26 @@ const MeetingRoom = ({ user }) => {
       await peer.setRemoteDescription(
         new RTCSessionDescription({ type: 'answer', sdp: signal.sdp })
       );
+      const queuedCandidates = pendingCandidatesRef.current[peerId] || [];
+      for (const candidate of queuedCandidates) {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          console.error('Queued ICE candidate error:', error);
+        }
+      }
+      delete pendingCandidatesRef.current[peerId];
       return;
     }
 
     if (signal.type === 'candidate' && signal.candidate) {
+      if (!peer.remoteDescription || !peer.remoteDescription.type) {
+        if (!pendingCandidatesRef.current[peerId]) {
+          pendingCandidatesRef.current[peerId] = [];
+        }
+        pendingCandidatesRef.current[peerId].push(signal.candidate);
+        return;
+      }
       try {
         await peer.addIceCandidate(new RTCIceCandidate(signal.candidate));
       } catch (error) {
@@ -440,6 +539,13 @@ const MeetingRoom = ({ user }) => {
       delete updated[peerId];
       return updated;
     });
+
+    if (pendingCandidatesRef.current[peerId]) {
+      delete pendingCandidatesRef.current[peerId];
+    }
+    if (makingOfferRef.current[peerId]) {
+      delete makingOfferRef.current[peerId];
+    }
   };
 
   const leaveRoom = () => {
@@ -647,29 +753,15 @@ const MeetingRoom = ({ user }) => {
       setScreenStream(screenStream);
       setIsScreenSharing(true);
       
-      // 替换本地流中的视频轨道
       if (localStreamRef.current) {
         const videoTrack = screenStream.getVideoTracks()[0];
-        const localVideoTrack = localStreamRef.current.getVideoTracks()[0];
-        
-        // 替换所有对等连接中的视频轨道
-        Object.values(peerConnectionsRef.current).forEach(peer => {
-          localStreamRef.current.getTracks().forEach(track => {
-            if (track.kind === 'video') {
-              const senders = peer.getSenders();
-              senders.forEach(sender => {
-                if (sender.track && sender.track.kind === 'video') {
-                  sender.replaceTrack(videoTrack);
-                }
-              });
-            }
-          });
-        });
-        
-        // 更新本地视频显示
+        await replaceOutgoingVideoTrack(videoTrack);
+
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = screenStream;
         }
+
+        await renegotiateAllPeers();
       }
       
       // 监听屏幕共享结束
@@ -682,7 +774,7 @@ const MeetingRoom = ({ user }) => {
     }
   };
 
-  const stopScreenSharing = () => {
+  const stopScreenSharing = async () => {
     const activeScreenStream = screenStreamRef.current || screenStream;
     if (activeScreenStream) {
       activeScreenStream.getTracks().forEach(track => track.stop());
@@ -691,24 +783,15 @@ const MeetingRoom = ({ user }) => {
       setScreenStream(null);
       setIsScreenSharing(false);
       
-      // 恢复本地摄像头
       if (localStreamRef.current) {
         const localVideoTrack = localStreamRef.current.getVideoTracks()[0];
-        
-        // 替换所有对等连接中的视频轨道
-        Object.values(peerConnectionsRef.current).forEach(peer => {
-          const senders = peer.getSenders();
-          senders.forEach(sender => {
-            if (sender.track && sender.track.kind === 'video') {
-              sender.replaceTrack(localVideoTrack);
-            }
-          });
-        });
-        
-        // 更新本地视频显示
+        await replaceOutgoingVideoTrack(localVideoTrack || null);
+
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = localStreamRef.current;
         }
+
+        await renegotiateAllPeers();
       }
     }
   };

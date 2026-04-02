@@ -5,7 +5,6 @@ import EventModal from './EventModal';
 import Login from './Login';
 import Register from './Register';
 import HomePage from './HomePage';
-import LandingPage from './LandingPage';
 import Profile from './Profile';
 import MeetingRoom from './MeetingRoom';
 import TaskHub from './TaskHub';
@@ -154,7 +153,7 @@ function App() {
           <Route
             path="/"
             element={
-              user ? <HomePage user={user} onLogout={handleLogout} /> : <LandingPage />
+              user ? <HomePage user={user} onLogout={handleLogout} /> : <Navigate to="/login" replace />
             }
           />
           <Route

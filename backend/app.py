@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, send_from_directory
+from flask import Flask, request, jsonify, session, send_from_directory, redirect
 from flask_cors import CORS
 from flask_session import Session
 from flask_socketio import SocketIO, emit, join_room as socket_join_room, leave_room as socket_leave_room
@@ -68,6 +68,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 FRONTEND_BUILD_DIR = os.path.abspath(os.path.join(basedir, '..', 'frontend_bundle'))
+FRONTEND_PUBLIC_URL = (os.environ.get('FRONTEND_PUBLIC_URL') or 'https://calendar-app-tr8r.vercel.app').rstrip('/')
 
 db.init_app(app)
 
@@ -422,6 +423,9 @@ with app.app_context():
 # 测试路由
 @app.route('/', methods=['GET'])
 def home():
+    if FRONTEND_PUBLIC_URL:
+        return redirect(f"{FRONTEND_PUBLIC_URL}/", code=302)
+
     index_file = os.path.join(FRONTEND_BUILD_DIR, 'index.html')
     if os.path.exists(index_file):
         return send_from_directory(FRONTEND_BUILD_DIR, 'index.html')
@@ -438,6 +442,12 @@ def frontend_static_files(filename):
 def frontend_spa_fallback(path):
     if path.startswith('api/'):
         return jsonify({'error': 'Not Found'}), 404
+
+    if FRONTEND_PUBLIC_URL:
+        target = f"{FRONTEND_PUBLIC_URL}/{path.lstrip('/')}"
+        if request.query_string:
+            target = f"{target}?{request.query_string.decode('utf-8')}"
+        return redirect(target, code=302)
 
     asset_path = os.path.join(FRONTEND_BUILD_DIR, path)
     if os.path.exists(asset_path) and os.path.isfile(asset_path):

@@ -1,0 +1,97 @@
+.community-page {
+  min-height: 100vh;
+  padding: 20px;
+  background: #f3f6fb;
+}
+
+.community-page header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.community-page header button,
+.post-editor button,
+.comment-box button,
+.post-actions button {
+  border: none;
+  background: #204ecf;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.post-editor {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 10px 20px rgba(16, 34, 58, 0.08);
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.post-editor textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.post-editor textarea,
+.post-editor select,
+.comment-box input {
+  border: 1px solid #d9e1ee;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.posts-list {
+  display: grid;
+  gap: 10px;
+}
+
+.post-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 8px 16px rgba(17, 33, 58, 0.08);
+}
+
+.post-head {
+  display: flex;
+  justify-content: space-between;
+  color: #58708f;
+}
+
+.post-head strong {
+  color: #1f2833;
+}
+
+.post-actions {
+  margin-bottom: 8px;
+}
+
+.comment-box {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.comment-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.comment-list li {
+  border-top: 1px solid #edf2f8;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.empty {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+}

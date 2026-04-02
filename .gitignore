@@ -1,0 +1,17 @@
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/build/
+
+# Local frontend env files
+frontend/.env
+frontend/.env.*
+!frontend/.env.production.example
+frontend/.nojekyll
+
+# Generated publish artifacts
+frontend_gh_publish/
+frontend_bundle/
+
+# Runtime session/cache files
+backend/flask_session/
+flask_session/

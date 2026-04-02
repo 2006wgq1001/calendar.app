@@ -153,6 +153,7 @@ const HomePage = ({ user, onLogout }) => {
         <header className="home-header">
           <div>
             <h1>灵境工坊 · 协作中枢</h1>
+            <p style={{ margin: '6px 0 0', fontSize: '12px', opacity: 0.75 }}>版本 2026.04.02-R2</p>
             <p>欢迎回来，{user && (user.name || user.username)}。今天继续推进团队目标。</p>
           </div>
           <div className="header-actions">

@@ -2,7 +2,14 @@
 PYTHONUNBUFFERED = "1"
 
 [phases.install]
-cmds = ["python -m pip install --upgrade pip", "pip install -r backend/requirements.txt"]
+cmds = [
+	"python -m pip install --upgrade pip",
+	"pip install -r backend/requirements.txt",
+	"cd frontend && npm ci"
+]
+
+[phases.build]
+cmds = ["cd frontend && npm run build"]
 
 [start]
 cmd = "cd backend && gunicorn --worker-class eventlet -w 1 app:app --bind 0.0.0.0:$PORT"

@@ -67,7 +67,21 @@ Session(app)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-FRONTEND_BUILD_DIR = os.path.abspath(os.path.join(basedir, '..', 'frontend_bundle'))
+FRONTEND_BUILD_DIR_CANDIDATES = [
+    os.path.abspath(os.path.join(basedir, '..', 'frontend', 'build')),
+    os.path.abspath(os.path.join(basedir, '..', 'frontend_bundle')),
+]
+
+
+def _resolve_frontend_build_dir():
+    for candidate in FRONTEND_BUILD_DIR_CANDIDATES:
+        index_file = os.path.join(candidate, 'index.html')
+        if os.path.exists(index_file):
+            return candidate
+    return FRONTEND_BUILD_DIR_CANDIDATES[0]
+
+
+FRONTEND_BUILD_DIR = _resolve_frontend_build_dir()
 
 db.init_app(app)
 

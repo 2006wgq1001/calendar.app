@@ -1,16 +1,19 @@
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
 from flask_session import Session
-from models import db, Event, User, Team, TeamMember, Task, Contact, Post, PostComment
+from flask_socketio import SocketIO, emit, join_room as socket_join_room, leave_room as socket_leave_room
+from models import db, Event, User, Team, TeamMember, Task, Contact, FriendRequest, RemoteControlRequest, Post, PostComment
 from datetime import datetime
 import sqlite3
 import os 
 import re
 import json
 from collections import Counter
+from threading import Lock
 from urllib import request as urlrequest
 from urllib.error import URLError, HTTPError
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from sqlalchemy import and_, or_
 
 
 def _split_env_csv(name, default_values):
@@ -42,6 +45,16 @@ CORS(app,
      supports_credentials=True, 
      allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=ALLOWED_ORIGINS,
+    manage_session=False,
+)
+
+room_members = {}
+socket_room_map = {}
+room_state_lock = Lock()
 
 # 配置会话
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
@@ -121,6 +134,95 @@ def current_user_id():
 
 def is_team_member(team_id, user_id):
     return TeamMember.query.filter_by(team_id=team_id, user_id=user_id).first() is not None
+
+
+def _socket_member_payload(sid):
+    user_info = session.get('user') or {}
+    uid = user_info.get('id')
+    name = (
+        user_info.get('name')
+        or user_info.get('username')
+        or f'成员 {sid[:6]}'
+    )
+    return {
+        'socketId': sid,
+        'userId': uid,
+        'name': name,
+    }
+
+
+def _remove_socket_from_room(sid, room_id=None, notify=True):
+    target_room = room_id or socket_room_map.get(sid)
+    if not target_room:
+        return
+
+    removed = False
+    with room_state_lock:
+        members = room_members.get(target_room, {})
+        removed = sid in members
+        if removed:
+            members.pop(sid, None)
+            if not members:
+                room_members.pop(target_room, None)
+        socket_room_map.pop(sid, None)
+
+    socket_leave_room(target_room, sid=sid)
+
+    if notify and removed:
+        socketio.emit('user-left', {'socketId': sid}, room=target_room)
+
+
+@socketio.on('join-room')
+def handle_join_room(payload):
+    room_id = str((payload or {}).get('roomId') or '').strip()
+    if not room_id:
+        emit('room-error', {'message': '房间号不能为空'})
+        return
+
+    previous_room = socket_room_map.get(request.sid)
+    if previous_room and previous_room != room_id:
+        _remove_socket_from_room(request.sid, previous_room, notify=True)
+
+    socket_join_room(room_id)
+    me = _socket_member_payload(request.sid)
+
+    with room_state_lock:
+        members = room_members.setdefault(room_id, {})
+        members[request.sid] = me
+        socket_room_map[request.sid] = room_id
+        others = [m for sid, m in members.items() if sid != request.sid]
+
+    emit('room-users', {'roomId': room_id, 'users': others})
+    socketio.emit('user-joined', me, room=room_id, skip_sid=request.sid)
+
+
+@socketio.on('leave-room')
+def handle_leave_room(payload):
+    room_id = str((payload or {}).get('roomId') or '').strip() or None
+    _remove_socket_from_room(request.sid, room_id, notify=True)
+
+
+@socketio.on('signal')
+def handle_signal(payload):
+    target_id = (payload or {}).get('targetId')
+    signal = (payload or {}).get('signal')
+
+    if not target_id or signal is None:
+        emit('room-error', {'message': '信令参数不完整'})
+        return
+
+    sender_room = socket_room_map.get(request.sid)
+    target_room = socket_room_map.get(target_id)
+    if not sender_room or sender_room != target_room:
+        emit('room-error', {'message': '目标成员不在同一房间'})
+        return
+
+    socketio.emit('signal', {'from': request.sid, 'signal': signal}, room=target_id)
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    _remove_socket_from_room(request.sid, notify=True)
 
 
 
@@ -863,16 +965,96 @@ def create_contact():
     if Contact.query.filter_by(user_id=uid, contact_user_id=contact_user_id).first():
         return jsonify({'error': '联系人已存在'}), 400
 
-    contact = Contact(
-        user_id=uid,
-        contact_user_id=contact_user_id,
-        tag=data.get('tag', ''),
-        note=data.get('note', ''),
-        is_favorite=bool(data.get('is_favorite', False)),
+    pending_request = FriendRequest.query.filter_by(
+        requester_id=uid,
+        receiver_id=contact_user_id,
+        status='pending'
+    ).first()
+    if pending_request:
+        return jsonify({'error': '好友申请已发送，请等待对方处理'}), 400
+
+    friend_request = FriendRequest(
+        requester_id=uid,
+        receiver_id=contact_user_id,
+        request_tag=data.get('tag', ''),
+        request_note=data.get('note', ''),
+        status='pending',
     )
-    db.session.add(contact)
+    db.session.add(friend_request)
     db.session.commit()
-    return jsonify(contact.to_dict()), 201
+    return jsonify({'message': '好友申请已发送', 'request': friend_request.to_dict()}), 201
+
+
+@app.route('/api/contact-requests/incoming', methods=['GET'])
+def get_incoming_contact_requests():
+    uid = current_user_id()
+    if not uid:
+        return jsonify({'error': '请先登录'}), 401
+
+    requests = FriendRequest.query.filter_by(receiver_id=uid, status='pending') \
+        .order_by(FriendRequest.created_at.desc()).all()
+    return jsonify([r.to_dict() for r in requests])
+
+
+@app.route('/api/contact-requests/outgoing', methods=['GET'])
+def get_outgoing_contact_requests():
+    uid = current_user_id()
+    if not uid:
+        return jsonify({'error': '请先登录'}), 401
+
+    requests = FriendRequest.query.filter_by(requester_id=uid, status='pending') \
+        .order_by(FriendRequest.created_at.desc()).all()
+    return jsonify([r.to_dict() for r in requests])
+
+
+@app.route('/api/contact-requests/<int:request_id>/respond', methods=['POST'])
+def respond_contact_request(request_id):
+    uid = current_user_id()
+    if not uid:
+        return jsonify({'error': '请先登录'}), 401
+
+    friend_request = FriendRequest.query.get_or_404(request_id)
+    if friend_request.receiver_id != uid:
+        return jsonify({'error': '无权处理该申请'}), 403
+    if friend_request.status != 'pending':
+        return jsonify({'error': '该申请已处理'}), 400
+
+    data = request.json or {}
+    action = (data.get('action') or '').strip().lower()
+    if action not in ['accepted', 'rejected']:
+        return jsonify({'error': '无效操作'}), 400
+
+    if action == 'accepted':
+        requester_to_receiver = Contact.query.filter_by(
+            user_id=friend_request.requester_id,
+            contact_user_id=friend_request.receiver_id,
+        ).first()
+        if not requester_to_receiver:
+            db.session.add(Contact(
+                user_id=friend_request.requester_id,
+                contact_user_id=friend_request.receiver_id,
+                tag=friend_request.request_tag or '',
+                note=friend_request.request_note or '',
+                is_favorite=False,
+            ))
+
+        receiver_to_requester = Contact.query.filter_by(
+            user_id=friend_request.receiver_id,
+            contact_user_id=friend_request.requester_id,
+        ).first()
+        if not receiver_to_requester:
+            db.session.add(Contact(
+                user_id=friend_request.receiver_id,
+                contact_user_id=friend_request.requester_id,
+                tag='',
+                note='',
+                is_favorite=False,
+            ))
+
+    friend_request.status = action
+    friend_request.responded_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'message': '好友申请已处理', 'request': friend_request.to_dict()})
 
 
 @app.route('/api/contacts/<int:contact_id>', methods=['PUT'])
@@ -907,6 +1089,112 @@ def delete_contact(contact_id):
     db.session.delete(contact)
     db.session.commit()
     return jsonify({'success': True})
+
+
+@app.route('/api/remote-control-requests', methods=['POST'])
+def create_remote_control_request():
+    uid = current_user_id()
+    if not uid:
+        return jsonify({'error': '请先登录'}), 401
+
+    data = request.json or {}
+    target_user_id = data.get('target_user_id')
+    try:
+        target_user_id = int(target_user_id)
+    except (TypeError, ValueError):
+        target_user_id = None
+    if not target_user_id:
+        return jsonify({'error': '请选择联系人'}), 400
+    if target_user_id == uid:
+        return jsonify({'error': '不能向自己发起远程操控'}), 400
+
+    target_user = User.query.get(target_user_id)
+    if not target_user:
+        return jsonify({'error': '目标用户不存在'}), 404
+
+    # 仅允许联系人之间发起远程操控请求，降低误发风险
+    relation = Contact.query.filter_by(user_id=uid, contact_user_id=target_user_id).first() or Contact.query.filter_by(
+        user_id=target_user_id,
+        contact_user_id=uid,
+    ).first()
+    if not relation:
+        return jsonify({'error': '仅可向通讯录联系人发起远程操控请求'}), 403
+
+    pending = RemoteControlRequest.query.filter(
+        RemoteControlRequest.status == 'pending',
+        or_(
+            and_(
+                RemoteControlRequest.requester_id == uid,
+                RemoteControlRequest.target_user_id == target_user_id,
+            ),
+            and_(
+                RemoteControlRequest.requester_id == target_user_id,
+                RemoteControlRequest.target_user_id == uid,
+            )
+        )
+    ).first()
+    if pending:
+        return jsonify({'error': '已有待处理远程操控请求'}), 400
+
+    room_id = str(data.get('room_id') or '').strip()
+    if not room_id:
+        room_id = f'rc-{min(uid, target_user_id)}-{max(uid, target_user_id)}-{int(datetime.utcnow().timestamp())}'
+
+    control_request = RemoteControlRequest(
+        requester_id=uid,
+        target_user_id=target_user_id,
+        room_id=room_id,
+        control_note=(data.get('control_note') or '').strip(),
+        status='pending',
+    )
+    db.session.add(control_request)
+    db.session.commit()
+    return jsonify({'message': '远程操控请求已发送', 'request': control_request.to_dict()}), 201
+
+
+@app.route('/api/remote-control-requests/incoming', methods=['GET'])
+def get_incoming_remote_control_requests():
+    uid = current_user_id()
+    if not uid:
+        return jsonify({'error': '请先登录'}), 401
+
+    requests = RemoteControlRequest.query.filter_by(target_user_id=uid, status='pending') \
+        .order_by(RemoteControlRequest.created_at.desc()).all()
+    return jsonify([item.to_dict() for item in requests])
+
+
+@app.route('/api/remote-control-requests/outgoing', methods=['GET'])
+def get_outgoing_remote_control_requests():
+    uid = current_user_id()
+    if not uid:
+        return jsonify({'error': '请先登录'}), 401
+
+    requests = RemoteControlRequest.query.filter_by(requester_id=uid, status='pending') \
+        .order_by(RemoteControlRequest.created_at.desc()).all()
+    return jsonify([item.to_dict() for item in requests])
+
+
+@app.route('/api/remote-control-requests/<int:request_id>/respond', methods=['POST'])
+def respond_remote_control_request(request_id):
+    uid = current_user_id()
+    if not uid:
+        return jsonify({'error': '请先登录'}), 401
+
+    control_request = RemoteControlRequest.query.get_or_404(request_id)
+    if control_request.target_user_id != uid:
+        return jsonify({'error': '无权处理该请求'}), 403
+    if control_request.status != 'pending':
+        return jsonify({'error': '该请求已处理'}), 400
+
+    data = request.json or {}
+    action = (data.get('action') or '').strip().lower()
+    if action not in ['accepted', 'rejected']:
+        return jsonify({'error': '无效操作'}), 400
+
+    control_request.status = action
+    control_request.responded_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'message': '远程操控请求已处理', 'request': control_request.to_dict()})
 
 
 @app.route('/api/posts', methods=['GET'])
@@ -1172,4 +1460,10 @@ if __name__ == '__main__':
     print("启动日历API服务器...")
     print("访问 http://localhost:5000 测试API")
     print("访问 http://localhost:5000/api/events 获取事件")
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    socketio.run(
+        app,
+        debug=True,
+        port=5000,
+        host='0.0.0.0',
+        allow_unsafe_werkzeug=True,
+    )

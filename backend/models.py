@@ -176,6 +176,66 @@ class Contact(db.Model):
         }
 
 
+class FriendRequest(db.Model):
+    __tablename__ = 'friend_request'
+
+    id = db.Column(db.Integer, primary_key=True)
+    requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    request_tag = db.Column(db.String(80), default='')
+    request_note = db.Column(db.String(200), default='')
+    status = db.Column(db.String(20), default='pending')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    responded_at = db.Column(db.DateTime)
+
+    requester = db.relationship('User', foreign_keys=[requester_id])
+    receiver = db.relationship('User', foreign_keys=[receiver_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'requester_id': self.requester_id,
+            'receiver_id': self.receiver_id,
+            'request_tag': self.request_tag,
+            'request_note': self.request_note,
+            'status': self.status,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+            'responded_at': self.responded_at.strftime('%Y-%m-%d %H:%M:%S') if self.responded_at else None,
+            'requester': self.requester.to_dict() if self.requester else None,
+            'receiver': self.receiver.to_dict() if self.receiver else None,
+        }
+
+
+class RemoteControlRequest(db.Model):
+    __tablename__ = 'remote_control_request'
+
+    id = db.Column(db.Integer, primary_key=True)
+    requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    target_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    room_id = db.Column(db.String(64), nullable=False)
+    control_note = db.Column(db.String(200), default='')
+    status = db.Column(db.String(20), default='pending')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    responded_at = db.Column(db.DateTime)
+
+    requester = db.relationship('User', foreign_keys=[requester_id])
+    target_user = db.relationship('User', foreign_keys=[target_user_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'requester_id': self.requester_id,
+            'target_user_id': self.target_user_id,
+            'room_id': self.room_id,
+            'control_note': self.control_note,
+            'status': self.status,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+            'responded_at': self.responded_at.strftime('%Y-%m-%d %H:%M:%S') if self.responded_at else None,
+            'requester': self.requester.to_dict() if self.requester else None,
+            'target_user': self.target_user.to_dict() if self.target_user else None,
+        }
+
+
 class Post(db.Model):
     __tablename__ = 'post'
 

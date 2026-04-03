@@ -8,7 +8,8 @@ const SIGNAL_URL =
   (['localhost', '127.0.0.1'].includes(window.location.hostname)
     ? (process.env.REACT_APP_SIGNAL_URL ||
       ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'))
-    : window.location.origin);
+    : (process.env.REACT_APP_SIGNAL_URL ||
+      ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || window.location.origin)));
 
 const RTC_ICE_SERVERS = (() => {
   const defaults = [
@@ -335,6 +336,7 @@ const MeetingRoom = ({ user }) => {
       iceServers: RTC_ICE_SERVERS,
     });
 
+    // 添加所有轨道
     localStream.getTracks().forEach((track) => {
       peer.addTrack(track, localStream);
     });
@@ -345,7 +347,7 @@ const MeetingRoom = ({ user }) => {
       if (sharedTrack) {
         const sender = peer.getSenders().find((item) => item.track && item.track.kind === 'video');
         if (sender) {
-          sender.replaceTrack(sharedTrack);
+          await sender.replaceTrack(sharedTrack);
         }
       }
     }
@@ -413,7 +415,28 @@ const MeetingRoom = ({ user }) => {
   const renegotiateAllPeers = async () => {
     const peerIds = Object.keys(peerConnectionsRef.current);
     for (const peerId of peerIds) {
-      await createOfferToPeer(peerId);
+      try {
+        const peer = peerConnectionsRef.current[peerId];
+        if (peer) {
+          // 确保连接状态稳定
+          if (peer.signalingState !== 'stable') {
+            // 等待状态稳定
+            await new Promise(resolve => {
+              const checkState = () => {
+                if (peer.signalingState === 'stable') {
+                  resolve();
+                } else {
+                  setTimeout(checkState, 100);
+                }
+              };
+              checkState();
+            });
+          }
+          await createOfferToPeer(peerId);
+        }
+      } catch (error) {
+        console.error('Renegotiate peer failed:', error);
+      }
     }
   };
 
@@ -761,6 +784,7 @@ const MeetingRoom = ({ user }) => {
           localVideoRef.current.srcObject = screenStream;
         }
 
+        // 确保所有连接都重新协商
         await renegotiateAllPeers();
       }
       

@@ -4,8 +4,8 @@ import axios from 'axios';
 const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const envBaseURL = (process.env.REACT_APP_API_BASE_URL || '').trim();
 const defaultBaseURL = isLocalhost ? 'http://localhost:5000/api' : '/api';
-// 线上统一走同域 /api，避免旧环境变量导致跨域被浏览器拦截。
-axios.defaults.baseURL = isLocalhost ? (envBaseURL || defaultBaseURL) : defaultBaseURL;
+// 使用环境变量中的 API 基础 URL，确保前端能正确连接到后端
+axios.defaults.baseURL = envBaseURL || defaultBaseURL;
 axios.defaults.withCredentials = true; // 允许发送cookies
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 

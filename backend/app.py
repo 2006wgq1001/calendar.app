@@ -37,18 +37,42 @@ DEFAULT_ORIGINS = [
     'https://2006wgq1001.github.io',
 ]
 
-ALLOWED_ORIGINS = _split_env_csv('CORS_ORIGINS', DEFAULT_ORIGINS)
+def _build_allowed_origins():
+    configured = (os.environ.get('CORS_ORIGINS') or '').strip()
+    if configured:
+        return _split_env_csv('CORS_ORIGINS', DEFAULT_ORIGINS)
+
+    origins = list(DEFAULT_ORIGINS)
+    railway_domain = (os.environ.get('RAILWAY_PUBLIC_DOMAIN') or '').strip()
+    railway_static_url = (os.environ.get('RAILWAY_STATIC_URL') or '').strip()
+
+    if railway_domain:
+        origins.append(f'https://{railway_domain}')
+        origins.append(f'http://{railway_domain}')
+    if railway_static_url:
+        origins.append(railway_static_url.rstrip('/'))
+
+    # 生产环境未配置 CORS_ORIGINS 时，允许任意来源，避免会议信令握手被拦截。
+    if IS_PRODUCTION and not railway_domain and not railway_static_url:
+        return '*'
+
+    return origins
+
+
+ALLOWED_ORIGINS = _build_allowed_origins()
+CORS_ORIGINS_FOR_FLASK = r'.*' if ALLOWED_ORIGINS == '*' else ALLOWED_ORIGINS
+SOCKET_CORS_ORIGINS = '*' if ALLOWED_ORIGINS == '*' else ALLOWED_ORIGINS
 
 app = Flask(__name__, static_folder=None)
 CORS(app, 
-    origins=ALLOWED_ORIGINS,
+    origins=CORS_ORIGINS_FOR_FLASK,
      supports_credentials=True, 
      allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 socketio = SocketIO(
     app,
-    cors_allowed_origins=ALLOWED_ORIGINS,
+    cors_allowed_origins=SOCKET_CORS_ORIGINS,
     manage_session=False,
 )
 

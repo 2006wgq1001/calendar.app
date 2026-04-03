@@ -4,12 +4,24 @@ import { io } from 'socket.io-client';
 import axios from './axiosConfig';
 import './MeetingRoom.css';
 
-const SIGNAL_URL =
-  (['localhost', '127.0.0.1'].includes(window.location.hostname)
-    ? (process.env.REACT_APP_SIGNAL_URL ||
-      ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'))
-    : (process.env.REACT_APP_SIGNAL_URL ||
-      ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || window.location.origin)));
+const resolveSignalUrl = () => {
+  const explicitSignalUrl = (process.env.REACT_APP_SIGNAL_URL || '').trim();
+  if (explicitSignalUrl) {
+    return explicitSignalUrl;
+  }
+
+  if (['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    return ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000');
+  }
+
+  if (window.location.hostname.endsWith('railway.app')) {
+    return window.location.origin;
+  }
+
+  return ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || window.location.origin);
+};
+
+const SIGNAL_URL = resolveSignalUrl();
 
 const RTC_ICE_SERVERS = (() => {
   const defaults = [

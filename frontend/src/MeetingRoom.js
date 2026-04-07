@@ -24,26 +24,63 @@ const resolveSignalUrl = () => {
 const SIGNAL_URL = resolveSignalUrl();
 
 const RTC_ICE_SERVERS = (() => {
-  const defaults = [
+  const stunDefaults = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
   ];
 
   const turnUrl = (process.env.REACT_APP_TURN_URL || '').trim();
   const turnUsername = (process.env.REACT_APP_TURN_USERNAME || '').trim();
   const turnCredential = (process.env.REACT_APP_TURN_CREDENTIAL || '').trim();
 
-  if (!turnUrl) {
-    return defaults;
+  // 可选：支持通过 JSON 数组传入多个 TURN 配置。
+  // 例子：[{"urls":"turn:xxx:3478","username":"u","credential":"p"}]
+  const turnServersJson = (process.env.REACT_APP_TURN_SERVERS_JSON || '').trim();
+  let customTurnServers = [];
+  if (turnServersJson) {
+    try {
+      const parsed = JSON.parse(turnServersJson);
+      if (Array.isArray(parsed)) {
+        customTurnServers = parsed.filter((item) => item && item.urls);
+      }
+    } catch (error) {
+      // ignore invalid env value and continue with defaults
+    }
   }
 
-  return [
-    ...defaults,
-    {
+  if (turnUrl) {
+    customTurnServers.push({
       urls: turnUrl,
       username: turnUsername,
       credential: turnCredential,
+    });
+  }
+
+  // 兜底公共中继（生产建议替换为你自己的 TURN）。
+  const fallbackTurnServers = [
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
     },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+  ];
+
+  return [
+    ...stunDefaults,
+    ...(customTurnServers.length > 0 ? customTurnServers : fallbackTurnServers),
   ];
 })();
 
@@ -384,6 +421,9 @@ const MeetingRoom = ({ user }) => {
 
     peer.onconnectionstatechange = () => {
       if (['failed', 'closed', 'disconnected'].includes(peer.connectionState)) {
+        if (peer.connectionState === 'failed') {
+          setStatus('音视频连接失败，可能是网络中继不可用，请检查 TURN 配置');
+        }
         removePeer(peerId);
       }
     };

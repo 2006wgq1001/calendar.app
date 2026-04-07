@@ -146,6 +146,7 @@ const MeetingRoom = ({ user }) => {
   const rtcConfigLoadedRef = useRef(false);
   const rtcConfigPromiseRef = useRef(null);
   const rtcIceServersRef = useRef(DEFAULT_RTC_ICE_SERVERS);
+  const remoteStreamsRef = useRef({});
   const controlRole = location.state?.controlRole || '';
   const controlPeerName = location.state?.controlPeerName || '对方';
 
@@ -351,7 +352,6 @@ const MeetingRoom = ({ user }) => {
       socketRef.current.on('user-joined', async ({ socketId, userId, name }) => {
         setStatus('有新成员加入房间');
         setMeetingMembers((prev) => mergeMembers(prev, [{ socketId, userId, name }]));
-        await createOfferToPeer(socketId);
       });
 
       socketRef.current.on('signal', async ({ from, signal }) => {
@@ -447,8 +447,18 @@ const MeetingRoom = ({ user }) => {
     };
 
     peer.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (!stream) return;
+      const [streamFromEvent] = event.streams || [];
+      let stream = streamFromEvent;
+
+      if (!stream) {
+        stream = remoteStreamsRef.current[peerId] || new MediaStream();
+        if (event.track && !stream.getTracks().some((item) => item.id === event.track.id)) {
+          stream.addTrack(event.track);
+        }
+      }
+
+      remoteStreamsRef.current[peerId] = stream;
+
       setRemoteStreams((prev) => ({
         ...prev,
         [peerId]: stream
@@ -651,6 +661,9 @@ const MeetingRoom = ({ user }) => {
       delete updated[peerId];
       return updated;
     });
+    if (remoteStreamsRef.current[peerId]) {
+      delete remoteStreamsRef.current[peerId];
+    }
 
     if (pendingCandidatesRef.current[peerId]) {
       delete pendingCandidatesRef.current[peerId];
@@ -687,6 +700,7 @@ const MeetingRoom = ({ user }) => {
     }
 
     setRemoteStreams({});
+    remoteStreamsRef.current = {};
     setMeetingMembers([]);
     setActiveRoomId('');
     setStatus('已离开房间');

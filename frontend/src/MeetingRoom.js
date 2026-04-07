@@ -131,6 +131,7 @@ const MeetingRoom = ({ user }) => {
   const [generatedTasks, setGeneratedTasks] = useState([]);
   const [showGeneratedTasks, setShowGeneratedTasks] = useState(false);
   const [meetingMembers, setMeetingMembers] = useState([]);
+  const [roomHostSocketId, setRoomHostSocketId] = useState('');
 
   const socketRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -156,6 +157,7 @@ const MeetingRoom = ({ user }) => {
     socketId: member?.socketId || '',
     userId: member?.userId || null,
     name: member?.name || `成员 ${(member?.socketId || '').slice(0, 6)}`,
+    role: member?.role || 'member',
   });
 
   const mergeMembers = (prev, incoming) => {
@@ -345,12 +347,14 @@ const MeetingRoom = ({ user }) => {
         setStatus(payload?.message || '加入房间失败');
       });
 
-      socketRef.current.on('room-users', async ({ roomId, users }) => {
+      socketRef.current.on('room-users', async ({ roomId, users, hostSocketId }) => {
         setStatus(`已加入房间 ${roomId}`);
+        setRoomHostSocketId(hostSocketId || '');
         const selfMember = {
           socketId: socketRef.current?.id || '',
           userId: user?.id || null,
           name: currentUserName,
+          role: hostSocketId && hostSocketId === socketRef.current?.id ? 'host' : 'member',
         };
         setMeetingMembers((prev) => mergeMembers(prev, [...(users || []), selfMember]));
         for (const item of users) {
@@ -362,10 +366,18 @@ const MeetingRoom = ({ user }) => {
 
       socketRef.current.on('user-joined', async ({ socketId, userId, name }) => {
         setStatus('有新成员加入房间');
-        setMeetingMembers((prev) => mergeMembers(prev, [{ socketId, userId, name }]));
+        setMeetingMembers((prev) => mergeMembers(prev, [{ socketId, userId, name, role: 'member' }]));
         if (shouldInitiatePeer(socketId)) {
           await createOfferToPeer(socketId);
         }
+      });
+
+      socketRef.current.on('room-role-updated', ({ hostSocketId }) => {
+        setRoomHostSocketId(hostSocketId || '');
+        setMeetingMembers((prev) => prev.map((member) => ({
+          ...member,
+          role: member.socketId === hostSocketId ? 'host' : 'member',
+        })));
       });
 
       socketRef.current.on('signal', async ({ from, signal }) => {
@@ -719,6 +731,7 @@ const MeetingRoom = ({ user }) => {
     setRemoteStreams({});
     remoteStreamsRef.current = {};
     setMeetingMembers([]);
+    setRoomHostSocketId('');
     setActiveRoomId('');
     setStatus('已离开房间');
     setIsCameraOn(true);
@@ -1034,11 +1047,15 @@ const MeetingRoom = ({ user }) => {
       <div className="video-grid">
         <div className="video-card">
           <video ref={localVideoRef} autoPlay muted playsInline />
-          <div className="video-label">我（本地）</div>
+          <div className="video-label">我（本地）{roomHostSocketId && socketRef.current?.id === roomHostSocketId ? '｜房主' : '｜成员'}</div>
         </div>
 
         {Object.entries(remoteStreams).map(([peerId, stream]) => (
-          <RemoteVideo key={peerId} stream={stream} label={`成员 ${peerId.slice(0, 6)}`} />
+          <RemoteVideo
+            key={peerId}
+            stream={stream}
+            label={`${meetingMembers.find((m) => m.socketId === peerId)?.role === 'host' ? '房主' : '成员'} ${peerId.slice(0, 6)}`}
+          />
         ))}
       </div>
 
@@ -1046,7 +1063,7 @@ const MeetingRoom = ({ user }) => {
         <h3>实时会议记录</h3>
         <p className="meeting-members-tip">
           会议成员：{meetingMembers.length > 0
-            ? meetingMembers.map((m) => m.name).join('、')
+            ? meetingMembers.map((m) => `${m.role === 'host' ? '房主' : '成员'} ${m.name}`).join('、')
             : currentUserName}
         </p>
         <div className="transcript-box">

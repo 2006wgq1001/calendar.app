@@ -78,6 +78,7 @@ socketio = SocketIO(
 
 room_members = {}
 socket_room_map = {}
+room_host_map = {}
 room_state_lock = Lock()
 
 # 配置会话
@@ -253,7 +254,7 @@ def is_team_member(team_id, user_id):
     return TeamMember.query.filter_by(team_id=team_id, user_id=user_id).first() is not None
 
 
-def _socket_member_payload(sid):
+def _socket_member_payload(sid, role='member'):
     user_info = session.get('user') or {}
     uid = user_info.get('id')
     name = (
@@ -265,7 +266,29 @@ def _socket_member_payload(sid):
         'socketId': sid,
         'userId': uid,
         'name': name,
+        'role': role,
     }
+
+
+def _room_host_sid(room_id):
+    host_sid = room_host_map.get(room_id)
+    if host_sid and host_sid in (room_members.get(room_id) or {}):
+        return host_sid
+
+    members = room_members.get(room_id) or {}
+    first_sid = next(iter(members.keys()), None)
+    if first_sid:
+        room_host_map[room_id] = first_sid
+    return first_sid
+
+
+def _room_member_payloads(room_id):
+    members = room_members.get(room_id) or {}
+    host_sid = _room_host_sid(room_id)
+    return [
+        _socket_member_payload(sid, role='host' if sid == host_sid else 'member')
+        for sid in members.keys()
+    ]
 
 
 def _remove_socket_from_room(sid, room_id=None, notify=True):
@@ -274,6 +297,7 @@ def _remove_socket_from_room(sid, room_id=None, notify=True):
         return
 
     removed = False
+    promote_payload = None
     with room_state_lock:
         members = room_members.get(target_room, {})
         removed = sid in members
@@ -281,12 +305,27 @@ def _remove_socket_from_room(sid, room_id=None, notify=True):
             members.pop(sid, None)
             if not members:
                 room_members.pop(target_room, None)
+                room_host_map.pop(target_room, None)
+            else:
+                host_sid = room_host_map.get(target_room)
+                if host_sid == sid or host_sid not in members:
+                    new_host_sid = next(iter(members.keys()), None)
+                    if new_host_sid:
+                        room_host_map[target_room] = new_host_sid
+                        promote_payload = _socket_member_payload(new_host_sid, role='host')
         socket_room_map.pop(sid, None)
 
     socket_leave_room(target_room, sid=sid)
 
     if notify and removed:
         socketio.emit('user-left', {'socketId': sid}, room=target_room)
+        if promote_payload:
+            socketio.emit('room-role-updated', {
+                'roomId': target_room,
+                'hostSocketId': promote_payload['socketId'],
+                'hostUserId': promote_payload['userId'],
+                'hostName': promote_payload['name'],
+            }, room=target_room)
 
 
 @socketio.on('join-room')
@@ -305,12 +344,31 @@ def handle_join_room(payload):
 
     with room_state_lock:
         members = room_members.setdefault(room_id, {})
-        members[request.sid] = me
         socket_room_map[request.sid] = room_id
-        others = [m for sid, m in members.items() if sid != request.sid]
+        host_sid = room_host_map.get(room_id)
+        if not host_sid or host_sid not in members:
+            room_host_map[room_id] = request.sid
+            host_sid = request.sid
+        me = _socket_member_payload(request.sid, role='host' if request.sid == host_sid else 'member')
+        members[request.sid] = me
+        others = [
+            _socket_member_payload(sid, role='host' if sid == host_sid else 'member')
+            for sid in members.keys()
+            if sid != request.sid
+        ]
 
-    emit('room-users', {'roomId': room_id, 'users': others})
+    emit('room-users', {
+        'roomId': room_id,
+        'users': others,
+        'hostSocketId': room_host_map.get(room_id),
+    })
     socketio.emit('user-joined', me, room=room_id, skip_sid=request.sid)
+    socketio.emit('room-role-updated', {
+        'roomId': room_id,
+        'hostSocketId': room_host_map.get(room_id),
+        'hostUserId': me['userId'] if me['role'] == 'host' else None,
+        'hostName': me['name'] if me['role'] == 'host' else None,
+    }, room=room_id)
 
 
 @socketio.on('leave-room')

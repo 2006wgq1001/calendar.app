@@ -172,7 +172,7 @@ const MeetingRoom = ({ user }) => {
 
   const shouldInitiatePeer = (peerId) => {
     const selfId = socketRef.current?.id || '';
-    return Boolean(selfId && peerId && selfId > peerId);
+    return Boolean(selfId && peerId && roomHostSocketId && selfId === roomHostSocketId);
   };
 
   const normalizeActionItems = (rawItems, fallbackSummary = '') => {

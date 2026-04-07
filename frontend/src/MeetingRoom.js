@@ -23,7 +23,7 @@ const resolveSignalUrl = () => {
 
 const SIGNAL_URL = resolveSignalUrl();
 
-const RTC_ICE_SERVERS = (() => {
+const DEFAULT_RTC_ICE_SERVERS = (() => {
   const stunDefaults = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -137,6 +137,9 @@ const MeetingRoom = ({ user }) => {
   const recognitionRef = useRef(null);
   const shouldKeepRecognizingRef = useRef(false);
   const autoJoinOnceRef = useRef(false);
+  const rtcConfigLoadedRef = useRef(false);
+  const rtcConfigPromiseRef = useRef(null);
+  const rtcIceServersRef = useRef(DEFAULT_RTC_ICE_SERVERS);
   const controlRole = location.state?.controlRole || '';
   const controlPeerName = location.state?.controlPeerName || '对方';
 
@@ -358,6 +361,32 @@ const MeetingRoom = ({ user }) => {
     return socketRef.current;
   };
 
+  const loadRtcConfig = async () => {
+    if (rtcConfigLoadedRef.current) {
+      return rtcIceServersRef.current;
+    }
+
+    if (!rtcConfigPromiseRef.current) {
+      rtcConfigPromiseRef.current = axios.get('/webrtc-config')
+        .then((response) => {
+          const nextIceServers = Array.isArray(response?.data?.iceServers) && response.data.iceServers.length > 0
+            ? response.data.iceServers
+            : DEFAULT_RTC_ICE_SERVERS;
+          rtcIceServersRef.current = nextIceServers;
+          rtcConfigLoadedRef.current = true;
+          return nextIceServers;
+        })
+        .catch((error) => {
+          console.error('Load WebRTC config failed:', error);
+          rtcConfigLoadedRef.current = true;
+          rtcIceServersRef.current = DEFAULT_RTC_ICE_SERVERS;
+          return DEFAULT_RTC_ICE_SERVERS;
+        });
+    }
+
+    return rtcConfigPromiseRef.current;
+  };
+
   const getLocalStream = async () => {
     if (!localStreamRef.current) {
       localStreamRef.current = await navigator.mediaDevices.getUserMedia({
@@ -382,7 +411,7 @@ const MeetingRoom = ({ user }) => {
     const localStream = await getLocalStream();
 
     const peer = new RTCPeerConnection({
-      iceServers: RTC_ICE_SERVERS,
+      iceServers: rtcIceServersRef.current,
     });
 
     // 添加所有轨道
@@ -581,6 +610,7 @@ const MeetingRoom = ({ user }) => {
     }
 
     try {
+      await loadRtcConfig();
       await getLocalStream();
       const socket = getOrCreateSocket();
       setTranscriptLines([]);

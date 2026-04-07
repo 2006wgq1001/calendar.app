@@ -107,6 +107,65 @@ def _resolve_frontend_build_dir():
 
 FRONTEND_BUILD_DIR = _resolve_frontend_build_dir()
 
+
+def _build_webrtc_ice_servers():
+    stun_defaults = [
+        {'urls': 'stun:stun.l.google.com:19302'},
+        {'urls': 'stun:stun1.l.google.com:19302'},
+        {'urls': 'stun:stun2.l.google.com:19302'},
+        {'urls': 'stun:stun3.l.google.com:19302'},
+        {'urls': 'stun:stun4.l.google.com:19302'},
+    ]
+
+    turn_servers = []
+
+    turn_servers_json = (os.environ.get('TURN_SERVERS_JSON') or os.environ.get('REACT_APP_TURN_SERVERS_JSON') or '').strip()
+    if turn_servers_json:
+        try:
+          parsed = json.loads(turn_servers_json)
+          if isinstance(parsed, list):
+              turn_servers.extend([item for item in parsed if isinstance(item, dict) and item.get('urls')])
+        except Exception:
+            pass
+
+    turn_url = (os.environ.get('TURN_URL') or os.environ.get('REACT_APP_TURN_URL') or '').strip()
+    turn_username = (os.environ.get('TURN_USERNAME') or os.environ.get('REACT_APP_TURN_USERNAME') or '').strip()
+    turn_credential = (os.environ.get('TURN_CREDENTIAL') or os.environ.get('REACT_APP_TURN_CREDENTIAL') or '').strip()
+    if turn_url:
+        turn_servers.append({
+            'urls': turn_url,
+            'username': turn_username,
+            'credential': turn_credential,
+        })
+
+    fallback_turn_servers = [
+        {
+            'urls': 'turn:openrelay.metered.ca:80',
+            'username': 'openrelayproject',
+            'credential': 'openrelayproject',
+        },
+        {
+            'urls': 'turn:openrelay.metered.ca:443',
+            'username': 'openrelayproject',
+            'credential': 'openrelayproject',
+        },
+        {
+            'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
+            'username': 'openrelayproject',
+            'credential': 'openrelayproject',
+        },
+    ]
+
+    return stun_defaults + (turn_servers if turn_servers else fallback_turn_servers)
+
+
+@app.get('/api/webrtc-config')
+def webrtc_config():
+    return jsonify({
+        'iceServers': _build_webrtc_ice_servers(),
+        'iceTransportPolicy': 'all',
+    })
+
 db.init_app(app)
 
 auth_serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])

@@ -168,6 +168,11 @@ const MeetingRoom = ({ user }) => {
     return Array.from(map.values());
   };
 
+  const shouldInitiatePeer = (peerId) => {
+    const selfId = socketRef.current?.id || '';
+    return Boolean(selfId && peerId && selfId > peerId);
+  };
+
   const normalizeActionItems = (rawItems, fallbackSummary = '') => {
     let items = rawItems;
     if (Array.isArray(items)) {
@@ -297,6 +302,10 @@ const MeetingRoom = ({ user }) => {
       return;
     }
 
+    if (isRecognizing) {
+      return;
+    }
+
     shouldKeepRecognizingRef.current = true;
     try {
       recognitionRef.current.start();
@@ -345,15 +354,18 @@ const MeetingRoom = ({ user }) => {
         };
         setMeetingMembers((prev) => mergeMembers(prev, [...(users || []), selfMember]));
         for (const item of users) {
-          await createOfferToPeer(item.socketId);
+          if (shouldInitiatePeer(item.socketId)) {
+            await createOfferToPeer(item.socketId);
+          }
         }
       });
 
       socketRef.current.on('user-joined', async ({ socketId, userId, name }) => {
         setStatus('有新成员加入房间');
         setMeetingMembers((prev) => mergeMembers(prev, [{ socketId, userId, name }]));
-        // 为新加入的用户创建 P2P 连接
-        await createOfferToPeer(socketId);
+        if (shouldInitiatePeer(socketId)) {
+          await createOfferToPeer(socketId);
+        }
       });
 
       socketRef.current.on('signal', async ({ from, signal }) => {
@@ -590,6 +602,9 @@ const MeetingRoom = ({ user }) => {
     }
 
     if (signal.type === 'answer') {
+      if (peer.signalingState === 'stable') {
+        return;
+      }
       await peer.setRemoteDescription(
         new RTCSessionDescription({ type: 'answer', sdp: signal.sdp })
       );

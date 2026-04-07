@@ -25,11 +25,7 @@ const SIGNAL_URL = resolveSignalUrl();
 
 const DEFAULT_RTC_ICE_SERVERS = (() => {
   const stunDefaults = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
   ];
 
   const turnUrl = (process.env.REACT_APP_TURN_URL || '').trim();
@@ -62,17 +58,12 @@ const DEFAULT_RTC_ICE_SERVERS = (() => {
   // 兜底公共中继（生产建议替换为你自己的 TURN）。
   const fallbackTurnServers = [
     {
-      urls: 'turn:openrelay.metered.ca:80',
+      urls: 'turn:relay.metered.ca:80',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
     {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      urls: 'turn:relay.metered.ca:443',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },

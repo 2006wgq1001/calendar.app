@@ -111,11 +111,7 @@ FRONTEND_BUILD_DIR = _resolve_frontend_build_dir()
 
 def _build_webrtc_ice_servers():
     stun_defaults = [
-        {'urls': 'stun:stun.l.google.com:19302'},
-        {'urls': 'stun:stun1.l.google.com:19302'},
-        {'urls': 'stun:stun2.l.google.com:19302'},
-        {'urls': 'stun:stun3.l.google.com:19302'},
-        {'urls': 'stun:stun4.l.google.com:19302'},
+        {'urls': 'stun:stun.cloudflare.com:3478'},
     ]
 
     turn_servers = []
@@ -149,17 +145,12 @@ def _build_webrtc_ice_servers():
 
     fallback_turn_servers = [
         {
-            'urls': 'turn:openrelay.metered.ca:80',
+            'urls': 'turn:relay.metered.ca:80',
             'username': 'openrelayproject',
             'credential': 'openrelayproject',
         },
         {
-            'urls': 'turn:openrelay.metered.ca:443',
-            'username': 'openrelayproject',
-            'credential': 'openrelayproject',
-        },
-        {
-            'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
+            'urls': 'turn:relay.metered.ca:443',
             'username': 'openrelayproject',
             'credential': 'openrelayproject',
         },

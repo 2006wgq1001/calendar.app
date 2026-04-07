@@ -90,6 +90,12 @@ function RemoteVideo({ stream, label }) {
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
+      const playPromise = videoRef.current.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+          // 某些浏览器会拦截自动播放，等待用户交互后会恢复。
+        });
+      }
     }
   }, [stream]);
 
@@ -345,6 +351,7 @@ const MeetingRoom = ({ user }) => {
       socketRef.current.on('user-joined', async ({ socketId, userId, name }) => {
         setStatus('有新成员加入房间');
         setMeetingMembers((prev) => mergeMembers(prev, [{ socketId, userId, name }]));
+        await createOfferToPeer(socketId);
       });
 
       socketRef.current.on('signal', async ({ from, signal }) => {

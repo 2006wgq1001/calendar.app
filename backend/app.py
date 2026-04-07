@@ -138,6 +138,14 @@ def _build_webrtc_ice_servers():
             'credential': turn_credential,
         })
 
+    turn_urls = [item.strip() for item in (os.environ.get('TURN_URLS') or '').split(',') if item.strip()]
+    for item in turn_urls:
+        turn_servers.append({
+            'urls': item,
+            'username': turn_username,
+            'credential': turn_credential,
+        })
+
     fallback_turn_servers = [
         {
             'urls': 'turn:openrelay.metered.ca:80',
@@ -156,7 +164,19 @@ def _build_webrtc_ice_servers():
         },
     ]
 
-    return stun_defaults + (turn_servers if turn_servers else fallback_turn_servers)
+    merged_turn_servers = turn_servers + fallback_turn_servers
+
+    # 按 urls 去重，保持配置稳定。
+    dedup_turn_servers = []
+    seen_urls = set()
+    for server in merged_turn_servers:
+        urls = server.get('urls')
+        if not urls or urls in seen_urls:
+            continue
+        seen_urls.add(urls)
+        dedup_turn_servers.append(server)
+
+    return stun_defaults + dedup_turn_servers
 
 
 @app.get('/api/webrtc-config')

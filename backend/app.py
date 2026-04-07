@@ -42,26 +42,26 @@ def _build_allowed_origins():
     if configured:
         return _split_env_csv('CORS_ORIGINS', DEFAULT_ORIGINS)
 
-    origins = list(DEFAULT_ORIGINS)
+    origins = set(DEFAULT_ORIGINS)
     railway_domain = (os.environ.get('RAILWAY_PUBLIC_DOMAIN') or '').strip()
     railway_static_url = (os.environ.get('RAILWAY_STATIC_URL') or '').strip()
+    frontend_url = (os.environ.get('FRONTEND_URL') or '').strip()
 
     if railway_domain:
-        origins.append(f'https://{railway_domain}')
-        origins.append(f'http://{railway_domain}')
+        origins.add(f'https://{railway_domain}')
+        origins.add(f'http://{railway_domain}')
     if railway_static_url:
-        origins.append(railway_static_url.rstrip('/'))
+        origins.add(railway_static_url.rstrip('/'))
+    if frontend_url:
+        origins.add(frontend_url.rstrip('/'))
 
-    # 生产环境未配置 CORS_ORIGINS 时，允许任意来源，避免会议信令握手被拦截。
-    if IS_PRODUCTION and not railway_domain and not railway_static_url:
-        return '*'
-
-    return origins
+    # 生产环境避免使用 '*'，否则与凭据场景冲突。
+    return list(origins)
 
 
 ALLOWED_ORIGINS = _build_allowed_origins()
-CORS_ORIGINS_FOR_FLASK = r'.*' if ALLOWED_ORIGINS == '*' else ALLOWED_ORIGINS
-SOCKET_CORS_ORIGINS = '*' if ALLOWED_ORIGINS == '*' else ALLOWED_ORIGINS
+CORS_ORIGINS_FOR_FLASK = ALLOWED_ORIGINS
+SOCKET_CORS_ORIGINS = ALLOWED_ORIGINS
 
 app = Flask(__name__, static_folder=None)
 CORS(app, 
@@ -116,15 +116,6 @@ def _build_webrtc_ice_servers():
 
     turn_servers = []
 
-    turn_servers_json = (os.environ.get('TURN_SERVERS_JSON') or os.environ.get('REACT_APP_TURN_SERVERS_JSON') or '').strip()
-    if turn_servers_json:
-        try:
-          parsed = json.loads(turn_servers_json)
-          if isinstance(parsed, list):
-              turn_servers.extend([item for item in parsed if isinstance(item, dict) and item.get('urls')])
-        except Exception:
-            pass
-
     turn_url = (os.environ.get('TURN_URL') or os.environ.get('REACT_APP_TURN_URL') or '').strip()
     turn_username = (os.environ.get('TURN_USERNAME') or os.environ.get('REACT_APP_TURN_USERNAME') or '').strip()
     turn_credential = (os.environ.get('TURN_CREDENTIAL') or os.environ.get('REACT_APP_TURN_CREDENTIAL') or '').strip()
@@ -156,7 +147,7 @@ def _build_webrtc_ice_servers():
         },
     ]
 
-    merged_turn_servers = turn_servers + fallback_turn_servers
+    merged_turn_servers = turn_servers if turn_servers else fallback_turn_servers
 
     # 按 urls 去重，保持配置稳定。
     dedup_turn_servers = []

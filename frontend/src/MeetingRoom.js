@@ -7,6 +7,10 @@ import './MeetingRoom.css';
 const resolveSignalUrl = () => {
   const explicitSignalUrl = (process.env.REACT_APP_SIGNAL_URL || '').trim();
   if (explicitSignalUrl) {
+    // 支持传入相对路径，如 "/" 或 "/signal"。
+    if (explicitSignalUrl.startsWith('/')) {
+      return `${window.location.origin}${explicitSignalUrl}`;
+    }
     return explicitSignalUrl;
   }
 
@@ -14,14 +18,12 @@ const resolveSignalUrl = () => {
     return ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000');
   }
 
-  if (window.location.hostname.endsWith('railway.app')) {
-    return window.location.origin;
-  }
-
-  return ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || window.location.origin);
+  // 公网 HTTPS 默认走同源信令，避免跨域和证书问题。
+  return window.location.origin;
 };
 
 const SIGNAL_URL = resolveSignalUrl();
+const SOCKET_IO_PATH = (process.env.REACT_APP_SOCKET_PATH || '/socket.io').trim() || '/socket.io';
 
 const DEFAULT_RTC_ICE_SERVERS = (() => {
   const stunDefaults = [
@@ -32,30 +34,6 @@ const DEFAULT_RTC_ICE_SERVERS = (() => {
   const turnUsername = (process.env.REACT_APP_TURN_USERNAME || '').trim();
   const turnCredential = (process.env.REACT_APP_TURN_CREDENTIAL || '').trim();
 
-  // 可选：支持通过 JSON 数组传入多个 TURN 配置。
-  // 例子：[{"urls":"turn:xxx:3478","username":"u","credential":"p"}]
-  const turnServersJson = (process.env.REACT_APP_TURN_SERVERS_JSON || '').trim();
-  let customTurnServers = [];
-  if (turnServersJson) {
-    try {
-      const parsed = JSON.parse(turnServersJson);
-      if (Array.isArray(parsed)) {
-        customTurnServers = parsed.filter((item) => item && item.urls);
-      }
-    } catch (error) {
-      // ignore invalid env value and continue with defaults
-    }
-  }
-
-  if (turnUrl) {
-    customTurnServers.push({
-      urls: turnUrl,
-      username: turnUsername,
-      credential: turnCredential,
-    });
-  }
-
-  // 兜底公共中继（生产建议替换为你自己的 TURN）。
   const fallbackTurnServers = [
     {
       urls: 'turn:relay.metered.ca:80',
@@ -68,6 +46,15 @@ const DEFAULT_RTC_ICE_SERVERS = (() => {
       credential: 'openrelayproject',
     },
   ];
+
+  const customTurnServers = [];
+  if (turnUrl) {
+    customTurnServers.push({
+      urls: turnUrl,
+      username: turnUsername,
+      credential: turnCredential,
+    });
+  }
 
   return [
     ...stunDefaults,
@@ -325,11 +312,17 @@ const MeetingRoom = ({ user }) => {
 
   const getOrCreateSocket = () => {
     if (!socketRef.current) {
+      const signalOrigin = new URL(SIGNAL_URL, window.location.origin).origin;
+      const isCrossOriginSignal = signalOrigin !== window.location.origin;
+
       socketRef.current = io(SIGNAL_URL, {
-        withCredentials: true,
+        withCredentials: isCrossOriginSignal,
         // 先走 polling，确保在禁用 websocket 的网络里也能建立信令。
         transports: ['polling', 'websocket'],
+        path: SOCKET_IO_PATH,
         upgrade: true,
+        tryAllTransports: true,
+        rememberUpgrade: true,
         reconnection: true,
         reconnectionAttempts: 8,
         reconnectionDelay: 800,

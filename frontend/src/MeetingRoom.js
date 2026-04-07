@@ -126,6 +126,7 @@ const MeetingRoom = ({ user }) => {
   const rtcConfigPromiseRef = useRef(null);
   const rtcIceServersRef = useRef(DEFAULT_RTC_ICE_SERVERS);
   const remoteStreamsRef = useRef({});
+  const disconnectTimerRef = useRef({});
   const controlRole = location.state?.controlRole || '';
   const controlPeerName = location.state?.controlPeerName || '对方';
 
@@ -494,7 +495,34 @@ const MeetingRoom = ({ user }) => {
     };
 
     peer.onconnectionstatechange = () => {
-      if (['failed', 'closed', 'disconnected'].includes(peer.connectionState)) {
+      if (peer.connectionState === 'connected') {
+        if (disconnectTimerRef.current[peerId]) {
+          clearTimeout(disconnectTimerRef.current[peerId]);
+          delete disconnectTimerRef.current[peerId];
+        }
+        return;
+      }
+
+      if (peer.connectionState === 'disconnected') {
+        // disconnected 在公网环境下可能是短暂抖动，延迟确认后再清理。
+        if (!disconnectTimerRef.current[peerId]) {
+          disconnectTimerRef.current[peerId] = setTimeout(() => {
+            const currentPeer = peerConnectionsRef.current[peerId];
+            if (!currentPeer) return;
+            if (currentPeer.connectionState === 'disconnected') {
+              setStatus('成员网络波动，正在尝试恢复连接');
+            }
+            delete disconnectTimerRef.current[peerId];
+          }, 8000);
+        }
+        return;
+      }
+
+      if (['failed', 'closed'].includes(peer.connectionState)) {
+        if (disconnectTimerRef.current[peerId]) {
+          clearTimeout(disconnectTimerRef.current[peerId]);
+          delete disconnectTimerRef.current[peerId];
+        }
         if (peer.connectionState === 'failed') {
           setStatus('音视频连接失败，可能是网络中继不可用，请检查 TURN 配置');
         }
@@ -679,6 +707,11 @@ const MeetingRoom = ({ user }) => {
   };
 
   const removePeer = (peerId) => {
+    if (disconnectTimerRef.current[peerId]) {
+      clearTimeout(disconnectTimerRef.current[peerId]);
+      delete disconnectTimerRef.current[peerId];
+    }
+
     const peer = peerConnectionsRef.current[peerId];
     if (peer) {
       peer.onicecandidate = null;
@@ -732,6 +765,10 @@ const MeetingRoom = ({ user }) => {
 
     setRemoteStreams({});
     remoteStreamsRef.current = {};
+    Object.keys(disconnectTimerRef.current).forEach((peerId) => {
+      clearTimeout(disconnectTimerRef.current[peerId]);
+    });
+    disconnectTimerRef.current = {};
     setMeetingMembers([]);
     setRoomHostSocketId('');
     setActiveRoomId('');

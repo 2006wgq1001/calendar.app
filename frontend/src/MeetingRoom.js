@@ -336,11 +336,25 @@ const MeetingRoom = ({ user }) => {
     if (!socketRef.current) {
       socketRef.current = io(SIGNAL_URL, {
         withCredentials: true,
-        transports: ['websocket', 'polling']
+        // 先走 polling，确保在禁用 websocket 的网络里也能建立信令。
+        transports: ['polling', 'websocket'],
+        upgrade: true,
+        reconnection: true,
+        reconnectionAttempts: 8,
+        reconnectionDelay: 800,
+        timeout: 15000,
+      });
+
+      socketRef.current.on('connect', () => {
+        setStatus('已连接会议服务，等待加入房间');
       });
 
       socketRef.current.on('connect_error', () => {
         setStatus('连接会议服务失败，请确认后端已启动');
+      });
+
+      socketRef.current.on('disconnect', () => {
+        setStatus('会议服务连接已断开，正在尝试重连');
       });
 
       socketRef.current.on('room-error', (payload) => {
@@ -389,6 +403,10 @@ const MeetingRoom = ({ user }) => {
         setMeetingMembers((prev) => prev.filter((m) => m.socketId !== socketId));
         setStatus('有成员离开房间');
       });
+    }
+
+    if (socketRef.current.disconnected) {
+      socketRef.current.connect();
     }
 
     return socketRef.current;

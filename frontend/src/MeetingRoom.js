@@ -352,6 +352,8 @@ const MeetingRoom = ({ user }) => {
       socketRef.current.on('user-joined', async ({ socketId, userId, name }) => {
         setStatus('有新成员加入房间');
         setMeetingMembers((prev) => mergeMembers(prev, [{ socketId, userId, name }]));
+        // 为新加入的用户创建 P2P 连接
+        await createOfferToPeer(socketId);
       });
 
       socketRef.current.on('signal', async ({ from, signal }) => {

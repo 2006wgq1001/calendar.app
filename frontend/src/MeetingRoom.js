@@ -127,6 +127,7 @@ const MeetingRoom = ({ user }) => {
   const rtcIceServersRef = useRef(DEFAULT_RTC_ICE_SERVERS);
   const remoteStreamsRef = useRef({});
   const disconnectTimerRef = useRef({});
+  const hostSocketIdRef = useRef('');
   const controlRole = location.state?.controlRole || '';
   const controlPeerName = location.state?.controlPeerName || '对方';
 
@@ -151,7 +152,8 @@ const MeetingRoom = ({ user }) => {
 
   const shouldInitiatePeer = (peerId) => {
     const selfId = socketRef.current?.id || '';
-    return Boolean(selfId && peerId && roomHostSocketId && selfId === roomHostSocketId);
+    const hostId = hostSocketIdRef.current || roomHostSocketId;
+    return Boolean(selfId && peerId && hostId && selfId === hostId);
   };
 
   const normalizeActionItems = (rawItems, fallbackSummary = '') => {
@@ -348,6 +350,7 @@ const MeetingRoom = ({ user }) => {
 
       socketRef.current.on('room-users', async ({ roomId, users, hostSocketId }) => {
         setStatus(`已加入房间 ${roomId}`);
+        hostSocketIdRef.current = hostSocketId || '';
         setRoomHostSocketId(hostSocketId || '');
         const selfMember = {
           socketId: socketRef.current?.id || '',
@@ -372,6 +375,7 @@ const MeetingRoom = ({ user }) => {
       });
 
       socketRef.current.on('room-role-updated', ({ hostSocketId }) => {
+        hostSocketIdRef.current = hostSocketId || '';
         setRoomHostSocketId(hostSocketId || '');
         setMeetingMembers((prev) => prev.map((member) => ({
           ...member,
@@ -770,6 +774,7 @@ const MeetingRoom = ({ user }) => {
     });
     disconnectTimerRef.current = {};
     setMeetingMembers([]);
+    hostSocketIdRef.current = '';
     setRoomHostSocketId('');
     setActiveRoomId('');
     setStatus('已离开房间');

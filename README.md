@@ -107,6 +107,8 @@
    - `APP_ENV=production`
    - `SECRET_KEY=<随机长字符串>`
    - `CORS_ORIGINS=`（先留空或先填临时值，前端上线后再更新）
+   - `SOCKET_CORS_ORIGINS=*`（建议开启，避免多域名/预览域导致 Socket 信令握手失败）
+   - `TURN_URL / TURN_USERNAME / TURN_CREDENTIAL`（强烈建议配置你自己的 TURN 服务）
 5. 点击 `Create Web Service` 部署。
 6. 部署成功后获取后端域名，例如：`https://calendar-backend.onrender.com`
 
@@ -125,6 +127,7 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
    - Root Directory: `frontend`
 4. 添加环境变量：
    - `REACT_APP_API_BASE_URL=https://calendar-backend.onrender.com/api`
+   - `REACT_APP_SIGNAL_URL=https://calendar-backend.onrender.com`（可选；不填时会自动根据 `REACT_APP_API_BASE_URL` 推导）
 5. 点击 `Deploy`。
 6. 部署成功后获取前端域名，例如：`https://calendar-frontend.vercel.app`
 

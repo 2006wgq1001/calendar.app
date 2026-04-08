@@ -46,6 +46,7 @@ def _build_allowed_origins():
     railway_domain = (os.environ.get('RAILWAY_PUBLIC_DOMAIN') or '').strip()
     railway_static_url = (os.environ.get('RAILWAY_STATIC_URL') or '').strip()
     frontend_url = (os.environ.get('FRONTEND_URL') or '').strip()
+    vercel_url = (os.environ.get('VERCEL_URL') or '').strip()
 
     if railway_domain:
         origins.add(f'https://{railway_domain}')
@@ -54,14 +55,28 @@ def _build_allowed_origins():
         origins.add(railway_static_url.rstrip('/'))
     if frontend_url:
         origins.add(frontend_url.rstrip('/'))
+    if vercel_url:
+        if vercel_url.startswith('http://') or vercel_url.startswith('https://'):
+            origins.add(vercel_url.rstrip('/'))
+        else:
+            origins.add(f"https://{vercel_url.rstrip('/')}")
 
     # 生产环境避免使用 '*'，否则与凭据场景冲突。
     return list(origins)
 
 
+def _build_socket_cors_origins():
+    configured = (os.environ.get('SOCKET_CORS_ORIGINS') or '').strip()
+    if configured:
+        return _split_env_csv('SOCKET_CORS_ORIGINS', ALLOWED_ORIGINS)
+
+    # WebRTC 信令不依赖 Cookie，默认放宽到 '*' 可避免预览域名或多域部署导致握手失败。
+    return '*'
+
+
 ALLOWED_ORIGINS = _build_allowed_origins()
 CORS_ORIGINS_FOR_FLASK = ALLOWED_ORIGINS
-SOCKET_CORS_ORIGINS = ALLOWED_ORIGINS
+SOCKET_CORS_ORIGINS = _build_socket_cors_origins()
 
 app = Flask(__name__, static_folder=None)
 CORS(app, 
@@ -112,6 +127,7 @@ FRONTEND_BUILD_DIR = _resolve_frontend_build_dir()
 def _build_webrtc_ice_servers():
     stun_defaults = [
         {'urls': 'stun:stun.cloudflare.com:3478'},
+        {'urls': 'stun:stun.l.google.com:19302'},
     ]
 
     turn_servers = []
@@ -142,6 +158,16 @@ def _build_webrtc_ice_servers():
         },
         {
             'urls': 'turn:relay.metered.ca:443',
+            'username': 'openrelayproject',
+            'credential': 'openrelayproject',
+        },
+        {
+            'urls': 'turn:relay.metered.ca:443?transport=tcp',
+            'username': 'openrelayproject',
+            'credential': 'openrelayproject',
+        },
+        {
+            'urls': 'turns:relay.metered.ca:443?transport=tcp',
             'username': 'openrelayproject',
             'credential': 'openrelayproject',
         },

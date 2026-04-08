@@ -4,6 +4,8 @@ import { io } from 'socket.io-client';
 import axios from './axiosConfig';
 import './MeetingRoom.css';
 
+const stripApiSuffix = (value) => value.replace(/\/api\/?$/i, '');
+
 const resolveSignalUrl = () => {
   const explicitSignalUrl = (process.env.REACT_APP_SIGNAL_URL || '').trim();
   if (explicitSignalUrl) {
@@ -14,8 +16,28 @@ const resolveSignalUrl = () => {
     return explicitSignalUrl;
   }
 
+  // 前后端分离部署时，优先从 API 地址推导信令地址，避免默认连到前端静态域名。
+  const envApiBase = (process.env.REACT_APP_API_BASE_URL || '').trim();
+  if (envApiBase) {
+    if (envApiBase.startsWith('http://') || envApiBase.startsWith('https://')) {
+      try {
+        const apiUrl = new URL(envApiBase);
+        const pathname = stripApiSuffix(apiUrl.pathname || '/');
+        const cleanedPath = pathname === '/' ? '' : pathname.replace(/\/$/, '');
+        return `${apiUrl.origin}${cleanedPath}`;
+      } catch (error) {
+        // Ignore invalid URL and continue fallback.
+      }
+    }
+
+    if (envApiBase.startsWith('/')) {
+      const normalized = stripApiSuffix(envApiBase).replace(/\/$/, '');
+      return `${window.location.origin}${normalized || ''}`;
+    }
+  }
+
   if (['localhost', '127.0.0.1'].includes(window.location.hostname)) {
-    return ((process.env.REACT_APP_API_BASE_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000');
+    return (stripApiSuffix(process.env.REACT_APP_API_BASE_URL || '') || 'http://localhost:5000');
   }
 
   // 公网 HTTPS 默认走同源信令，避免跨域和证书问题。
@@ -128,6 +150,8 @@ const MeetingRoom = ({ user }) => {
   const remoteStreamsRef = useRef({});
   const disconnectTimerRef = useRef({});
   const hostSocketIdRef = useRef('');
+  const activeRoomIdRef = useRef('');
+  const joinedRoomIdRef = useRef('');
   const controlRole = location.state?.controlRole || '';
   const controlPeerName = location.state?.controlPeerName || '对方';
 
@@ -154,6 +178,27 @@ const MeetingRoom = ({ user }) => {
     const selfId = socketRef.current?.id || '';
     const hostId = hostSocketIdRef.current || roomHostSocketId;
     return Boolean(selfId && peerId && hostId && selfId === hostId);
+  };
+
+  const resetPeerState = () => {
+    Object.keys(peerConnectionsRef.current).forEach((peerId) => {
+      const peer = peerConnectionsRef.current[peerId];
+      if (peer) {
+        peer.onicecandidate = null;
+        peer.ontrack = null;
+        peer.close();
+      }
+    });
+
+    peerConnectionsRef.current = {};
+    makingOfferRef.current = {};
+    pendingCandidatesRef.current = {};
+    remoteStreamsRef.current = {};
+    Object.keys(disconnectTimerRef.current).forEach((peerId) => {
+      clearTimeout(disconnectTimerRef.current[peerId]);
+    });
+    disconnectTimerRef.current = {};
+    setRemoteStreams({});
   };
 
   const normalizeActionItems = (rawItems, fallbackSummary = '') => {
@@ -315,11 +360,9 @@ const MeetingRoom = ({ user }) => {
 
   const getOrCreateSocket = () => {
     if (!socketRef.current) {
-      const signalOrigin = new URL(SIGNAL_URL, window.location.origin).origin;
-      const isCrossOriginSignal = signalOrigin !== window.location.origin;
-
       socketRef.current = io(SIGNAL_URL, {
-        withCredentials: isCrossOriginSignal,
+        // 信令通道不依赖 Cookie，关闭凭据可减少跨域与 SameSite 限制问题。
+        withCredentials: false,
         // 先走 polling，确保在禁用 websocket 的网络里也能建立信令。
         transports: ['polling', 'websocket'],
         path: SOCKET_IO_PATH,
@@ -334,6 +377,13 @@ const MeetingRoom = ({ user }) => {
 
       socketRef.current.on('connect', () => {
         setStatus('已连接会议服务，等待加入房间');
+
+        const roomIdToRestore = activeRoomIdRef.current;
+        if (roomIdToRestore && joinedRoomIdRef.current !== roomIdToRestore) {
+          resetPeerState();
+          joinedRoomIdRef.current = roomIdToRestore;
+          socketRef.current.emit('join-room', { roomId: roomIdToRestore });
+        }
       });
 
       socketRef.current.on('connect_error', () => {
@@ -342,6 +392,7 @@ const MeetingRoom = ({ user }) => {
 
       socketRef.current.on('disconnect', () => {
         setStatus('会议服务连接已断开，正在尝试重连');
+        joinedRoomIdRef.current = '';
       });
 
       socketRef.current.on('room-error', (payload) => {
@@ -352,14 +403,16 @@ const MeetingRoom = ({ user }) => {
         setStatus(`已加入房间 ${roomId}`);
         hostSocketIdRef.current = hostSocketId || '';
         setRoomHostSocketId(hostSocketId || '');
+        joinedRoomIdRef.current = roomId;
         const selfMember = {
           socketId: socketRef.current?.id || '',
           userId: user?.id || null,
           name: currentUserName,
           role: hostSocketId && hostSocketId === socketRef.current?.id ? 'host' : 'member',
         };
-        setMeetingMembers((prev) => mergeMembers(prev, [...(users || []), selfMember]));
-        for (const item of users) {
+        const roomUsers = Array.isArray(users) ? users : [];
+        setMeetingMembers((prev) => mergeMembers(prev, [...roomUsers, selfMember]));
+        for (const item of roomUsers) {
           if (shouldInitiatePeer(item.socketId)) {
             await createOfferToPeer(item.socketId);
           }
@@ -692,6 +745,8 @@ const MeetingRoom = ({ user }) => {
     try {
       await loadRtcConfig();
       await getLocalStream();
+      activeRoomIdRef.current = roomId;
+      joinedRoomIdRef.current = roomId;
       const socket = getOrCreateSocket();
       setTranscriptLines([]);
       setLiveInterimText('');
@@ -744,14 +799,14 @@ const MeetingRoom = ({ user }) => {
   const leaveRoom = () => {
     stopSpeechRecognition();
     stopScreenSharing();
+    activeRoomIdRef.current = '';
+    joinedRoomIdRef.current = '';
 
     if (socketRef.current && activeRoomId) {
       socketRef.current.emit('leave-room', { roomId: activeRoomId });
     }
 
-    Object.keys(peerConnectionsRef.current).forEach((peerId) => {
-      removePeer(peerId);
-    });
+    resetPeerState();
 
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());

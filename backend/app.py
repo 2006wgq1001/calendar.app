@@ -37,6 +37,8 @@ DEFAULT_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'https://2006wgq1001.github.io',
+    'https://calendar-app-tr8r.vercel.app',
+    'https://calendar-app.vercel.app',
 ]
 
 def _build_allowed_origins():

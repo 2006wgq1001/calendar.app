@@ -197,7 +197,8 @@ def _build_webrtc_ice_servers():
         },
     ]
 
-    merged_turn_servers = turn_servers if turn_servers else fallback_turn_servers
+    # 即使配置了环境变量 TURN，也追加内置 fallback，避免单一 TURN 不可达导致跨网失败。
+    merged_turn_servers = turn_servers + fallback_turn_servers if turn_servers else fallback_turn_servers
 
     # 按 urls 去重，保持配置稳定。
     dedup_turn_servers = []

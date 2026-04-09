@@ -168,13 +168,10 @@ def _build_webrtc_ice_servers():
             'credential': turn_credential,
         })
 
-    turn_urls = [item.strip() for item in (os.environ.get('TURN_URLS') or '').split(',') if item.strip()]
-    for item in turn_urls:
-        turn_servers.append({
-            'urls': item,
-            'username': turn_username,
-            'credential': turn_credential,
-        })
+    # TURN_URLS 环境变量已禁用，直接用内置稳定 TURN 列表
+    # turn_urls = [item.strip() for item in (os.environ.get('TURN_URLS') or '').split(',') if item.strip()]
+    # for item in turn_urls:
+    #     turn_servers.append(...)
 
     fallback_turn_servers = [
         {
@@ -204,7 +201,7 @@ def _build_webrtc_ice_servers():
         },
     ]
 
-    # 鍗充娇閰嶇疆浜嗙幆澧冨彉閲?TURN锛屼篃杩藉姞鍐呯疆 fallback锛岄伩鍏嶅崟涓€ TURN 涓嶅彲杈惧鑷磋法缃戝け璐ャ€?    merged_turn_servers = turn_servers + fallback_turn_servers if turn_servers else fallback_turn_servers
+    merged_turn_servers = fallback_turn_servers  # ignore env TURN_URLS
 
     # 鎸?urls 鍘婚噸锛屼繚鎸侀厤缃ǔ瀹氥€?    dedup_turn_servers = []
     seen_urls = set()

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import axios from './axiosConfig';
@@ -9,15 +9,13 @@ const stripApiSuffix = (value) => value.replace(/\/api\/?$/i, '');
 const resolveSignalUrl = () => {
   const explicitSignalUrl = (process.env.REACT_APP_SIGNAL_URL || '').trim();
   if (explicitSignalUrl) {
-    // 支持传入相对路径，如 "/" 或 "/signal"。
-    if (explicitSignalUrl.startsWith('/')) {
+    // 鏀寔浼犲叆鐩稿璺緞锛屽 "/" 鎴?"/signal"銆?    if (explicitSignalUrl.startsWith('/')) {
       return `${window.location.origin}${explicitSignalUrl}`;
     }
     return explicitSignalUrl;
   }
 
-  // 前后端分离部署时，优先从 API 地址推导信令地址，避免默认连到前端静态域名。
-  const envApiBase = (process.env.REACT_APP_API_BASE_URL || '').trim();
+  // 鍓嶅悗绔垎绂婚儴缃叉椂锛屼紭鍏堜粠 API 鍦板潃鎺ㄥ淇′护鍦板潃锛岄伩鍏嶉粯璁よ繛鍒板墠绔潤鎬佸煙鍚嶃€?  const envApiBase = (process.env.REACT_APP_API_BASE_URL || '').trim();
   if (envApiBase) {
     if (envApiBase.startsWith('http://') || envApiBase.startsWith('https://')) {
       try {
@@ -40,8 +38,7 @@ const resolveSignalUrl = () => {
     return (stripApiSuffix(process.env.REACT_APP_API_BASE_URL || '') || 'http://localhost:5000');
   }
 
-  // 公网 HTTPS 默认走同源信令，避免跨域和证书问题。
-  return window.location.origin;
+  // 鍏綉 HTTPS 榛樿璧板悓婧愪俊浠わ紝閬垮厤璺ㄥ煙鍜岃瘉涔﹂棶棰樸€?  return window.location.origin;
 };
 
 const defaultPublicSignalUrl = (process.env.REACT_APP_DEFAULT_PUBLIC_SIGNAL_URL || 'https://calendarapp-production-d085.up.railway.app').trim();
@@ -55,8 +52,7 @@ const resolveSignalUrlWithFallback = () => {
     return resolved;
   }
 
-  // 在纯静态站点（如 vercel）且未显式配置信令地址时，回退到可公网访问的后端域名。
-  const explicitSignalUrl = (process.env.REACT_APP_SIGNAL_URL || '').trim();
+  // 鍦ㄧ函闈欐€佺珯鐐癸紙濡?vercel锛変笖鏈樉寮忛厤缃俊浠ゅ湴鍧€鏃讹紝鍥為€€鍒板彲鍏綉璁块棶鐨勫悗绔煙鍚嶃€?  const explicitSignalUrl = (process.env.REACT_APP_SIGNAL_URL || '').trim();
   if (!explicitSignalUrl && defaultPublicSignalUrl) {
     return defaultPublicSignalUrl;
   }
@@ -81,19 +77,29 @@ const DEFAULT_RTC_ICE_SERVERS = (() => {
 
   const fallbackTurnServers = [
     {
-        urls: 'turn:turn1.vlines.com:3478',
-        username: 'turnserver',
-        credential: 'turnserver',
+      urls: 'turn:stun.stunprotocol.org:3478',
+      username: '',
+      credential: '',
     },
     {
-        urls: 'turn:turn1.vlines.com:5349?transport=tcp',
-        username: 'turnserver',
-        credential: 'turnserver',
+      urls: 'turn:stun1.stunprotocol.org:3478',
+      username: '',
+      credential: '',
     },
     {
-        urls: 'turns:turn1.vlines.com:5349?transport=tcp',
-        username: 'turnserver',
-        credential: 'turnserver',
+      urls: 'turn:numb.viagenie.ca:3478?transport=udp',
+      username: 'webrtc@mozilla.org',
+      credential: 'webrtc',
+    },
+    {
+      urls: 'turn:numb.viagenie.ca:5349?transport=tcp',
+      username: 'webrtc@mozilla.org',
+      credential: 'webrtc',
+    },
+    {
+      urls: 'turns:numb.viagenie.ca:5349?transport=tcp',
+      username: 'webrtc@mozilla.org',
+      credential: 'webrtc',
     },
   ];
 
@@ -121,8 +127,7 @@ function RemoteVideo({ stream, label }) {
       const playPromise = videoRef.current.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch(() => {
-          // 某些浏览器会拦截自动播放，等待用户交互后会恢复。
-        });
+          // 鏌愪簺娴忚鍣ㄤ細鎷︽埅鑷姩鎾斁锛岀瓑寰呯敤鎴蜂氦浜掑悗浼氭仮澶嶃€?        });
       }
     }
   }, [stream]);
@@ -140,7 +145,7 @@ const MeetingRoom = ({ user }) => {
   const location = useLocation();
   const [roomInput, setRoomInput] = useState('');
   const [activeRoomId, setActiveRoomId] = useState('');
-  const [status, setStatus] = useState('未加入房间');
+  const [status, setStatus] = useState('鏈姞鍏ユ埧闂?);
   const [remoteStreams, setRemoteStreams] = useState({});
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
@@ -182,14 +187,14 @@ const MeetingRoom = ({ user }) => {
   const activeRoomIdRef = useRef('');
   const joinedRoomIdRef = useRef('');
   const controlRole = location.state?.controlRole || '';
-  const controlPeerName = location.state?.controlPeerName || '对方';
+  const controlPeerName = location.state?.controlPeerName || '瀵规柟';
 
-  const currentUserName = user?.name || user?.username || '我';
+  const currentUserName = user?.name || user?.username || '鎴?;
 
   const normalizeMember = (member) => ({
     socketId: member?.socketId || '',
     userId: member?.userId || null,
-    name: member?.name || `成员 ${(member?.socketId || '').slice(0, 6)}`,
+    name: member?.name || `鎴愬憳 ${(member?.socketId || '').slice(0, 6)}`,
     role: member?.role || 'member',
   });
 
@@ -237,7 +242,7 @@ const MeetingRoom = ({ user }) => {
     } else if (items && typeof items === 'object') {
       items = [items];
     } else if (typeof items === 'string' && items.trim()) {
-      items = [{ task: items.trim(), owner: '待确认', deadline: '待定' }];
+      items = [{ task: items.trim(), owner: '寰呯‘璁?, deadline: '寰呭畾' }];
     } else {
       items = [];
     }
@@ -245,15 +250,15 @@ const MeetingRoom = ({ user }) => {
     const normalized = items
       .map((item, idx) => {
         if (typeof item === 'string') {
-          return { task: item.trim(), owner: '待确认', deadline: '待定' };
+          return { task: item.trim(), owner: '寰呯‘璁?, deadline: '寰呭畾' };
         }
         if (!item || typeof item !== 'object') {
           return null;
         }
 
-        const task = String(item.task || item.title || '').trim() || `会议行动项 ${idx + 1}`;
-        const owner = String(item.owner || item.assignee || '').trim() || '待确认';
-        const deadline = String(item.deadline || item.due_date || '').trim() || '待定';
+        const task = String(item.task || item.title || '').trim() || `浼氳琛屽姩椤?${idx + 1}`;
+        const owner = String(item.owner || item.assignee || '').trim() || '寰呯‘璁?;
+        const deadline = String(item.deadline || item.due_date || '').trim() || '寰呭畾';
         return { task, owner, deadline };
       })
       .filter(Boolean)
@@ -261,9 +266,9 @@ const MeetingRoom = ({ user }) => {
 
     if (normalized.length === 0 && fallbackSummary) {
       normalized.push({
-        task: `根据会议摘要跟进：${String(fallbackSummary).slice(0, 60)}`,
-        owner: '待确认',
-        deadline: '待定',
+        task: `鏍规嵁浼氳鎽樿璺熻繘锛?{String(fallbackSummary).slice(0, 60)}`,
+        owner: '寰呯‘璁?,
+        deadline: '寰呭畾',
       });
     }
 
@@ -311,7 +316,7 @@ const MeetingRoom = ({ user }) => {
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       if (event.error === 'not-allowed') {
-        setStatus('语音识别权限被拒绝，请在浏览器中允许麦克风权限');
+        setStatus('璇煶璇嗗埆鏉冮檺琚嫆缁濓紝璇峰湪娴忚鍣ㄤ腑鍏佽楹﹀厠椋庢潈闄?);
       }
     };
 
@@ -355,7 +360,7 @@ const MeetingRoom = ({ user }) => {
 
   const startSpeechRecognition = () => {
     if (!recognitionSupported || !recognitionRef.current) {
-      setStatus('当前浏览器不支持语音识别，请使用最新版 Chrome/Edge');
+      setStatus('褰撳墠娴忚鍣ㄤ笉鏀寔璇煶璇嗗埆锛岃浣跨敤鏈€鏂扮増 Chrome/Edge');
       return;
     }
 
@@ -367,10 +372,10 @@ const MeetingRoom = ({ user }) => {
     try {
       recognitionRef.current.start();
       setIsRecognizing(true);
-      setStatus('语音识别进行中');
+      setStatus('璇煶璇嗗埆杩涜涓?);
     } catch (error) {
       console.error('Start speech recognition failed:', error);
-      setStatus('语音识别启动失败，请稍后重试');
+      setStatus('璇煶璇嗗埆鍚姩澶辫触锛岃绋嶅悗閲嶈瘯');
     }
   };
 
@@ -390,10 +395,8 @@ const MeetingRoom = ({ user }) => {
   const getOrCreateSocket = () => {
     if (!socketRef.current) {
       socketRef.current = io(SIGNAL_URL, {
-        // 信令通道不依赖 Cookie，关闭凭据可减少跨域与 SameSite 限制问题。
-        withCredentials: false,
-        // 先走 polling，确保在禁用 websocket 的网络里也能建立信令。
-        transports: ['polling', 'websocket'],
+        // 淇′护閫氶亾涓嶄緷璧?Cookie锛屽叧闂嚟鎹彲鍑忓皯璺ㄥ煙涓?SameSite 闄愬埗闂銆?        withCredentials: false,
+        // 鍏堣蛋 polling锛岀‘淇濆湪绂佺敤 websocket 鐨勭綉缁滈噷涔熻兘寤虹珛淇′护銆?        transports: ['polling', 'websocket'],
         path: SOCKET_IO_PATH,
         upgrade: true,
         tryAllTransports: true,
@@ -405,7 +408,7 @@ const MeetingRoom = ({ user }) => {
       });
 
       socketRef.current.on('connect', () => {
-        setStatus('已连接会议服务，等待加入房间');
+        setStatus('宸茶繛鎺ヤ細璁湇鍔★紝绛夊緟鍔犲叆鎴块棿');
 
         const roomIdToRestore = activeRoomIdRef.current;
         if (roomIdToRestore && joinedRoomIdRef.current !== roomIdToRestore) {
@@ -416,20 +419,20 @@ const MeetingRoom = ({ user }) => {
       });
 
       socketRef.current.on('connect_error', () => {
-        setStatus('连接会议服务失败，请确认后端已启动');
+        setStatus('杩炴帴浼氳鏈嶅姟澶辫触锛岃纭鍚庣宸插惎鍔?);
       });
 
       socketRef.current.on('disconnect', () => {
-        setStatus('会议服务连接已断开，正在尝试重连');
+        setStatus('浼氳鏈嶅姟杩炴帴宸叉柇寮€锛屾鍦ㄥ皾璇曢噸杩?);
         joinedRoomIdRef.current = '';
       });
 
       socketRef.current.on('room-error', (payload) => {
-        setStatus(payload?.message || '加入房间失败');
+        setStatus(payload?.message || '鍔犲叆鎴块棿澶辫触');
       });
 
       socketRef.current.on('room-users', async ({ roomId, users, hostSocketId }) => {
-        setStatus(`已加入房间 ${roomId}`);
+        setStatus(`宸插姞鍏ユ埧闂?${roomId}`);
         hostSocketIdRef.current = hostSocketId || '';
         setRoomHostSocketId(hostSocketId || '');
         joinedRoomIdRef.current = roomId;
@@ -449,7 +452,7 @@ const MeetingRoom = ({ user }) => {
       });
 
       socketRef.current.on('user-joined', async ({ socketId, userId, name }) => {
-        setStatus('有新成员加入房间');
+        setStatus('鏈夋柊鎴愬憳鍔犲叆鎴块棿');
         setMeetingMembers((prev) => mergeMembers(prev, [{ socketId, userId, name, role: 'member' }]));
         if (shouldInitiatePeer(socketId)) {
           await createOfferToPeer(socketId);
@@ -472,7 +475,7 @@ const MeetingRoom = ({ user }) => {
       socketRef.current.on('user-left', ({ socketId }) => {
         removePeer(socketId);
         setMeetingMembers((prev) => prev.filter((m) => m.socketId !== socketId));
-        setStatus('有成员离开房间');
+        setStatus('鏈夋垚鍛樼寮€鎴块棿');
       });
     }
 
@@ -542,8 +545,7 @@ const MeetingRoom = ({ user }) => {
       iceTransportPolicy: rtcIceTransportPolicyRef.current,
     });
 
-    // 添加所有轨道
-    localStream.getTracks().forEach((track) => {
+    // 娣诲姞鎵€鏈夎建閬?    localStream.getTracks().forEach((track) => {
       peer.addTrack(track, localStream);
     });
 
@@ -596,13 +598,12 @@ const MeetingRoom = ({ user }) => {
       }
 
       if (peer.connectionState === 'disconnected') {
-        // disconnected 在公网环境下可能是短暂抖动，延迟确认后再清理。
-        if (!disconnectTimerRef.current[peerId]) {
+        // disconnected 鍦ㄥ叕缃戠幆澧冧笅鍙兘鏄煭鏆傛姈鍔紝寤惰繜纭鍚庡啀娓呯悊銆?        if (!disconnectTimerRef.current[peerId]) {
           disconnectTimerRef.current[peerId] = setTimeout(() => {
             const currentPeer = peerConnectionsRef.current[peerId];
             if (!currentPeer) return;
             if (currentPeer.connectionState === 'disconnected') {
-              setStatus('成员网络波动，正在尝试恢复连接');
+              setStatus('鎴愬憳缃戠粶娉㈠姩锛屾鍦ㄥ皾璇曟仮澶嶈繛鎺?);
             }
             delete disconnectTimerRef.current[peerId];
           }, 8000);
@@ -616,7 +617,7 @@ const MeetingRoom = ({ user }) => {
           delete disconnectTimerRef.current[peerId];
         }
         if (peer.connectionState === 'failed') {
-          setStatus('音视频连接失败，可能是网络中继不可用，请检查 TURN 配置');
+          setStatus('闊宠棰戣繛鎺ュけ璐ワ紝鍙兘鏄綉缁滀腑缁т笉鍙敤锛岃妫€鏌?TURN 閰嶇疆');
         }
         removePeer(peerId);
       }
@@ -664,10 +665,8 @@ const MeetingRoom = ({ user }) => {
       try {
         const peer = peerConnectionsRef.current[peerId];
         if (peer) {
-          // 确保连接状态稳定
-          if (peer.signalingState !== 'stable') {
-            // 等待状态稳定
-            await new Promise(resolve => {
+          // 纭繚杩炴帴鐘舵€佺ǔ瀹?          if (peer.signalingState !== 'stable') {
+            // 绛夊緟鐘舵€佺ǔ瀹?            await new Promise(resolve => {
               const checkState = () => {
                 if (peer.signalingState === 'stable') {
                   resolve();
@@ -773,7 +772,7 @@ const MeetingRoom = ({ user }) => {
   const joinRoom = async (roomIdValue) => {
     const roomId = String(roomIdValue || '').trim();
     if (!roomId) {
-      setStatus('请先输入房间号');
+      setStatus('璇峰厛杈撳叆鎴块棿鍙?);
       return;
     }
 
@@ -791,12 +790,12 @@ const MeetingRoom = ({ user }) => {
       setGeneratedTasks([]);
       setShowGeneratedTasks(false);
       setActiveRoomId(roomId);
-      setStatus(`正在加入房间 ${roomId}...`);
+      setStatus(`姝ｅ湪鍔犲叆鎴块棿 ${roomId}...`);
       socket.emit('join-room', { roomId });
       startSpeechRecognition();
     } catch (error) {
       console.error(error);
-      setStatus('无法开启摄像头/麦克风，请检查浏览器权限');
+      setStatus('鏃犳硶寮€鍚憚鍍忓ご/楹﹀厠椋庯紝璇锋鏌ユ祻瑙堝櫒鏉冮檺');
     }
   };
 
@@ -867,7 +866,7 @@ const MeetingRoom = ({ user }) => {
     hostSocketIdRef.current = '';
     setRoomHostSocketId('');
     setActiveRoomId('');
-    setStatus('已离开房间');
+    setStatus('宸茬寮€鎴块棿');
     setIsCameraOn(true);
     setIsMicOn(true);
     setIsScreenSharing(false);
@@ -884,17 +883,17 @@ const MeetingRoom = ({ user }) => {
     joinRoom(autoRoomId);
 
     if (location.state?.controlRole === 'controller') {
-      setStatus(`远程操控请求已发出，正在房间 ${autoRoomId} 等待对方同意`);
+      setStatus(`杩滅▼鎿嶆帶璇锋眰宸插彂鍑猴紝姝ｅ湪鎴块棿 ${autoRoomId} 绛夊緟瀵规柟鍚屾剰`);
     }
     if (location.state?.controlRole === 'target') {
-      setStatus(`你已同意远程操控请求，正在进入房间 ${autoRoomId}`);
+      setStatus(`浣犲凡鍚屾剰杩滅▼鎿嶆帶璇锋眰锛屾鍦ㄨ繘鍏ユ埧闂?${autoRoomId}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, activeRoomId]);
 
   const generateMeetingSummary = async () => {
     if (transcriptLines.length === 0 && !liveInterimText.trim()) {
-      setSummaryError('暂无可总结的会议内容，请先开始会议对话。');
+      setSummaryError('鏆傛棤鍙€荤粨鐨勪細璁唴瀹癸紝璇峰厛寮€濮嬩細璁璇濄€?);
       return;
     }
 
@@ -923,7 +922,7 @@ const MeetingRoom = ({ user }) => {
       return summaryData;
     } catch (error) {
       console.error('Generate summary failed:', error);
-      setSummaryError(error?.response?.data?.error || '会议摘要生成失败，请稍后重试。');
+      setSummaryError(error?.response?.data?.error || '浼氳鎽樿鐢熸垚澶辫触锛岃绋嶅悗閲嶈瘯銆?);
       return null;
     } finally {
       setSummaryLoading(false);
@@ -941,7 +940,7 @@ const MeetingRoom = ({ user }) => {
       meetingSummary?.summary || ''
     );
     if (items.length === 0) {
-      setTaskSyncMessage('暂无可同步的行动项。');
+      setTaskSyncMessage('鏆傛棤鍙悓姝ョ殑琛屽姩椤广€?);
       return;
     }
 
@@ -963,19 +962,19 @@ const MeetingRoom = ({ user }) => {
         const createdTasks = response?.data?.tasks || [];
         setGeneratedTasks(createdTasks);
         setShowGeneratedTasks(true);
-        setTaskSyncMessage(`已同步 ${createdTasks.length} 条行动项到任务中心。`);
+        setTaskSyncMessage(`宸插悓姝?${createdTasks.length} 鏉¤鍔ㄩ」鍒颁换鍔′腑蹇冦€俙);
       } catch (apiError) {
-        // 兜底：若聚合接口失败，回退到逐条创建，保证用户操作可达成
+        // 鍏滃簳锛氳嫢鑱氬悎鎺ュ彛澶辫触锛屽洖閫€鍒伴€愭潯鍒涘缓锛屼繚璇佺敤鎴锋搷浣滃彲杈炬垚
         const fallbackRequests = items.map((item, idx) => {
-          const title = String(item?.task || '').trim() || `会议行动项 ${idx + 1}`;
-          const owner = String(item?.owner || '').trim() || '待确认';
+          const title = String(item?.task || '').trim() || `浼氳琛屽姩椤?${idx + 1}`;
+          const owner = String(item?.owner || '').trim() || '寰呯‘璁?;
           const deadline = String(item?.deadline || '').trim();
           const parsedDueDate = /^\d{4}-\d{2}-\d{2}$/.test(deadline) ? deadline : '';
           const assigneeId = memberIds.length > 0 ? memberIds[idx % memberIds.length] : '';
 
           return axios.post('/tasks', {
             title,
-            description: `来源：会议摘要${activeRoomId ? `（房间 ${activeRoomId}）` : ''}\n建议负责人：${owner}\n原始截止：${deadline || '待定'}`,
+            description: `鏉ユ簮锛氫細璁憳瑕?{activeRoomId ? `锛堟埧闂?${activeRoomId}锛塦 : ''}\n寤鸿璐熻矗浜猴細${owner}\n鍘熷鎴锛?{deadline || '寰呭畾'}`,
             priority: 'medium',
             due_date: parsedDueDate,
             assignee_id: assigneeId || null,
@@ -994,16 +993,16 @@ const MeetingRoom = ({ user }) => {
           setShowGeneratedTasks(true);
         }
 
-        const backendMessage = apiError?.response?.data?.error || apiError?.message || '未知错误';
+        const backendMessage = apiError?.response?.data?.error || apiError?.message || '鏈煡閿欒';
         setTaskSyncMessage(
           failCount === 0
-            ? `已同步 ${successTasks.length} 条行动项到任务中心（已自动走兼容模式）。`
-            : `部分同步成功：成功 ${successTasks.length} 条，失败 ${failCount} 条。后端信息：${backendMessage}`
+            ? `宸插悓姝?${successTasks.length} 鏉¤鍔ㄩ」鍒颁换鍔′腑蹇冿紙宸茶嚜鍔ㄨ蛋鍏煎妯″紡锛夈€俙
+            : `閮ㄥ垎鍚屾鎴愬姛锛氭垚鍔?${successTasks.length} 鏉★紝澶辫触 ${failCount} 鏉°€傚悗绔俊鎭細${backendMessage}`
         );
       }
     } catch (error) {
       console.error('Sync tasks failed:', error);
-      setTaskSyncMessage(error?.response?.data?.error || '同步任务失败，请稍后重试。');
+      setTaskSyncMessage(error?.response?.data?.error || '鍚屾浠诲姟澶辫触锛岃绋嶅悗閲嶈瘯銆?);
     } finally {
       setTaskSyncLoading(false);
     }
@@ -1051,17 +1050,17 @@ const MeetingRoom = ({ user }) => {
           localVideoRef.current.srcObject = screenStream;
         }
 
-        // 确保所有连接都重新协商
+        // 纭繚鎵€鏈夎繛鎺ラ兘閲嶆柊鍗忓晢
         await renegotiateAllPeers();
       }
       
-      // 监听屏幕共享结束
+      // 鐩戝惉灞忓箷鍏变韩缁撴潫
       screenStream.getVideoTracks()[0].onended = () => {
         stopScreenSharing();
       };
     } catch (error) {
       console.error('Error starting screen sharing:', error);
-      setStatus('屏幕共享失败，请检查浏览器权限');
+      setStatus('灞忓箷鍏变韩澶辫触锛岃妫€鏌ユ祻瑙堝櫒鏉冮檺');
     }
   };
 
@@ -1090,64 +1089,64 @@ const MeetingRoom = ({ user }) => {
   return (
     <div className="meeting-container">
       <header className="meeting-header">
-        <h2>会议室</h2>
-        <div className="meeting-user">当前用户：{user?.name || user?.username}</div>
+        <h2>浼氳瀹?/h2>
+        <div className="meeting-user">褰撳墠鐢ㄦ埛锛歿user?.name || user?.username}</div>
       </header>
 
       <div className="meeting-actions">
-        <button className="meeting-btn" onClick={createRoomId}>创建房间号</button>
+        <button className="meeting-btn" onClick={createRoomId}>鍒涘缓鎴块棿鍙?/button>
         <input
           className="meeting-input"
           type="text"
-          placeholder="输入房间号"
+          placeholder="杈撳叆鎴块棿鍙?
           value={roomInput}
           onChange={(e) => setRoomInput(e.target.value)}
         />
-        <button className="meeting-btn" onClick={() => joinRoom(roomInput)}>加入房间</button>
-        <button className="meeting-btn secondary" onClick={leaveRoom}>离开房间</button>
-        <button className="meeting-btn secondary" onClick={() => navigate('/')}>返回首页</button>
+        <button className="meeting-btn" onClick={() => joinRoom(roomInput)}>鍔犲叆鎴块棿</button>
+        <button className="meeting-btn secondary" onClick={leaveRoom}>绂诲紑鎴块棿</button>
+        <button className="meeting-btn secondary" onClick={() => navigate('/')}>杩斿洖棣栭〉</button>
       </div>
 
       <div className="media-controls">
         <button
           className={`media-btn ${isCameraOn ? 'active' : 'inactive'}`}
           onClick={toggleCamera}
-          title={isCameraOn ? '关闭摄像头' : '打开摄像头'}
+          title={isCameraOn ? '鍏抽棴鎽勫儚澶? : '鎵撳紑鎽勫儚澶?}
         >
-          {isCameraOn ? '📹' : '🚫📹'}
-          <span>{isCameraOn ? '摄像头开启' : '摄像头关闭'}</span>
+          {isCameraOn ? '馃摴' : '馃毇馃摴'}
+          <span>{isCameraOn ? '鎽勫儚澶村紑鍚? : '鎽勫儚澶村叧闂?}</span>
         </button>
         <button
           className={`media-btn ${isMicOn ? 'active' : 'inactive'}`}
           onClick={toggleMic}
-          title={isMicOn ? '关闭麦克风' : '打开麦克风'}
+          title={isMicOn ? '鍏抽棴楹﹀厠椋? : '鎵撳紑楹﹀厠椋?}
         >
-          {isMicOn ? '🎤' : '🚫🎤'}
-          <span>{isMicOn ? '麦克风开启' : '麦克风关闭'}</span>
+          {isMicOn ? '馃帳' : '馃毇馃帳'}
+          <span>{isMicOn ? '楹﹀厠椋庡紑鍚? : '楹﹀厠椋庡叧闂?}</span>
         </button>
 
         <button
           className={`media-btn ${isScreenSharing ? 'active' : 'inactive'}`}
           onClick={isScreenSharing ? stopScreenSharing : startScreenSharing}
-          title={isScreenSharing ? '停止屏幕共享' : '开始屏幕共享'}
+          title={isScreenSharing ? '鍋滄灞忓箷鍏变韩' : '寮€濮嬪睆骞曞叡浜?}
         >
-          {isScreenSharing ? '🖥️' : '📱'}
-          <span>{isScreenSharing ? '屏幕共享中' : '开始屏幕共享'}</span>
+          {isScreenSharing ? '馃枼锔? : '馃摫'}
+          <span>{isScreenSharing ? '灞忓箷鍏变韩涓? : '寮€濮嬪睆骞曞叡浜?}</span>
         </button>
 
         <button
           className={`media-btn ${isRecognizing ? 'active' : 'inactive'}`}
           onClick={isRecognizing ? stopSpeechRecognition : startSpeechRecognition}
-          title={isRecognizing ? '暂停语音识别' : '开始语音识别'}
+          title={isRecognizing ? '鏆傚仠璇煶璇嗗埆' : '寮€濮嬭闊宠瘑鍒?}
           disabled={!recognitionSupported}
         >
-          {isRecognizing ? '📝' : '▶️📝'}
+          {isRecognizing ? '馃摑' : '鈻讹笍馃摑'}
           <span>
             {!recognitionSupported
-              ? '浏览器不支持语音识别'
+              ? '娴忚鍣ㄤ笉鏀寔璇煶璇嗗埆'
               : isRecognizing
-                ? '语音识别中'
-                : '开始语音识别'}
+                ? '璇煶璇嗗埆涓?
+                : '寮€濮嬭闊宠瘑鍒?}
           </span>
         </button>
 
@@ -1155,10 +1154,10 @@ const MeetingRoom = ({ user }) => {
           className="media-btn active"
           onClick={endMeetingAndSummarize}
           disabled={summaryLoading}
-          title="结束会议并生成摘要"
+          title="缁撴潫浼氳骞剁敓鎴愭憳瑕?
         >
-          {summaryLoading ? '⏳' : '✅'}
-          <span>{summaryLoading ? '生成摘要中...' : '结束会议并生成摘要'}</span>
+          {summaryLoading ? '鈴? : '鉁?}
+          <span>{summaryLoading ? '鐢熸垚鎽樿涓?..' : '缁撴潫浼氳骞剁敓鎴愭憳瑕?}</span>
         </button>
 
         <label className="summary-task-toggle">
@@ -1167,42 +1166,42 @@ const MeetingRoom = ({ user }) => {
             checked={shouldGenerateTeamTasks}
             onChange={(e) => setShouldGenerateTeamTasks(e.target.checked)}
           />
-          <span>生成摘要时自动创建团队任务</span>
+          <span>鐢熸垚鎽樿鏃惰嚜鍔ㄥ垱寤哄洟闃熶换鍔?/span>
         </label>
       </div>
 
       <div className="meeting-status">
-        状态：{status}
-        {activeRoomId ? ` | 当前房间：${activeRoomId}` : ''}
-        {controlRole === 'controller' ? ` | 你正在向${controlPeerName}发起远程协助，请引导对方开启屏幕共享。` : ''}
-        {controlRole === 'target' ? ` | 你已授权${controlPeerName}远程协助，请按需开启屏幕共享。` : ''}
+        鐘舵€侊細{status}
+        {activeRoomId ? ` | 褰撳墠鎴块棿锛?{activeRoomId}` : ''}
+        {controlRole === 'controller' ? ` | 浣犳鍦ㄥ悜${controlPeerName}鍙戣捣杩滅▼鍗忓姪锛岃寮曞瀵规柟寮€鍚睆骞曞叡浜€俙 : ''}
+        {controlRole === 'target' ? ` | 浣犲凡鎺堟潈${controlPeerName}杩滅▼鍗忓姪锛岃鎸夐渶寮€鍚睆骞曞叡浜€俙 : ''}
       </div>
 
       <div className="video-grid">
         <div className="video-card">
           <video ref={localVideoRef} autoPlay muted playsInline />
-          <div className="video-label">我（本地）{roomHostSocketId && socketRef.current?.id === roomHostSocketId ? '｜房主' : '｜成员'}</div>
+          <div className="video-label">鎴戯紙鏈湴锛墈roomHostSocketId && socketRef.current?.id === roomHostSocketId ? '锝滄埧涓? : '锝滄垚鍛?}</div>
         </div>
 
         {Object.entries(remoteStreams).map(([peerId, stream]) => (
           <RemoteVideo
             key={peerId}
             stream={stream}
-            label={`${meetingMembers.find((m) => m.socketId === peerId)?.role === 'host' ? '房主' : '成员'} ${peerId.slice(0, 6)}`}
+            label={`${meetingMembers.find((m) => m.socketId === peerId)?.role === 'host' ? '鎴夸富' : '鎴愬憳'} ${peerId.slice(0, 6)}`}
           />
         ))}
       </div>
 
       <section className="meeting-ai-panel">
-        <h3>实时会议记录</h3>
+        <h3>瀹炴椂浼氳璁板綍</h3>
         <p className="meeting-members-tip">
-          会议成员：{meetingMembers.length > 0
-            ? meetingMembers.map((m) => `${m.role === 'host' ? '房主' : '成员'} ${m.name}`).join('、')
+          浼氳鎴愬憳锛歿meetingMembers.length > 0
+            ? meetingMembers.map((m) => `${m.role === 'host' ? '鎴夸富' : '鎴愬憳'} ${m.name}`).join('銆?)
             : currentUserName}
         </p>
         <div className="transcript-box">
           {transcriptLines.length === 0 && !liveInterimText ? (
-            <p className="placeholder">识别结果会实时显示在这里...</p>
+            <p className="placeholder">璇嗗埆缁撴灉浼氬疄鏃舵樉绀哄湪杩欓噷...</p>
           ) : (
             <>
               {transcriptLines.map((line, index) => (
@@ -1213,27 +1212,26 @@ const MeetingRoom = ({ user }) => {
           )}
         </div>
 
-        <h3>会议摘要</h3>
+        <h3>浼氳鎽樿</h3>
         {summaryError ? <p className="summary-error">{summaryError}</p> : null}
 
         {meetingSummary ? (
           <div className="summary-box">
-            <p><strong>摘要：</strong>{meetingSummary.summary}</p>
-            <p><strong>摘要来源：</strong>{meetingSummary.provider === 'llm' ? 'AI 模型' : '本地智能规则'}</p>
+            <p><strong>鎽樿锛?/strong>{meetingSummary.summary}</p>
+            <p><strong>鎽樿鏉ユ簮锛?/strong>{meetingSummary.provider === 'llm' ? 'AI 妯″瀷' : '鏈湴鏅鸿兘瑙勫垯'}</p>
 
-            <p><strong>关键要点：</strong></p>
+            <p><strong>鍏抽敭瑕佺偣锛?/strong></p>
             <ul>
               {(meetingSummary.key_points || []).map((point, idx) => (
                 <li key={`${point}-${idx}`}>{point}</li>
               ))}
             </ul>
 
-            <p><strong>行动项：</strong></p>
+            <p><strong>琛屽姩椤癸細</strong></p>
             <ul>
               {(meetingSummary.action_items || []).map((item, idx) => (
                 <li key={`${item.task || ''}-${idx}`}>
-                  {(item.owner || '待确认')} - {(item.task || '待补充')}（截止：{item.deadline || '待定'}）
-                </li>
+                  {(item.owner || '寰呯‘璁?)} - {(item.task || '寰呰ˉ鍏?)}锛堟埅姝細{item.deadline || '寰呭畾'}锛?                </li>
               ))}
             </ul>
 
@@ -1243,14 +1241,14 @@ const MeetingRoom = ({ user }) => {
                 onClick={syncActionItemsToTasks}
                 disabled={taskSyncLoading}
               >
-                {taskSyncLoading ? '同步中...' : '将行动项同步到任务中心'}
+                {taskSyncLoading ? '鍚屾涓?..' : '灏嗚鍔ㄩ」鍚屾鍒颁换鍔′腑蹇?}
               </button>
               <button
                 className="meeting-btn secondary"
                 onClick={() => setShowGeneratedTasks((prev) => !prev)}
                 disabled={generatedTasks.length === 0}
               >
-                {showGeneratedTasks ? '隐藏摘要任务' : '任务按钮：查看摘要任务'}
+                {showGeneratedTasks ? '闅愯棌鎽樿浠诲姟' : '浠诲姟鎸夐挳锛氭煡鐪嬫憳瑕佷换鍔?}
               </button>
               {taskSyncMessage ? <p className="summary-sync-msg">{taskSyncMessage}</p> : null}
 
@@ -1259,8 +1257,8 @@ const MeetingRoom = ({ user }) => {
                   {generatedTasks.map((task) => (
                     <article key={task.id} className="generated-task-item">
                       <p><strong>{task.title}</strong></p>
-                      <p>负责人：{task.assignee?.name || task.assignee?.username || '未分配'}</p>
-                      <p>截止：{task.due_date || '未设置'}</p>
+                      <p>璐熻矗浜猴細{task.assignee?.name || task.assignee?.username || '鏈垎閰?}</p>
+                      <p>鎴锛歿task.due_date || '鏈缃?}</p>
                     </article>
                   ))}
                 </div>
@@ -1268,7 +1266,7 @@ const MeetingRoom = ({ user }) => {
             </div>
           </div>
         ) : (
-          <p className="placeholder">点击“结束会议并生成摘要”后会展示结果。</p>
+          <p className="placeholder">鐐瑰嚮鈥滅粨鏉熶細璁苟鐢熸垚鎽樿鈥濆悗浼氬睍绀虹粨鏋溿€?/p>
         )}
       </section>
     </div>
@@ -1276,3 +1274,4 @@ const MeetingRoom = ({ user }) => {
 };
 
 export default MeetingRoom;
+

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, send_from_directory, redirect
+﻿from flask import Flask, request, jsonify, session, send_from_directory, redirect
 from flask_cors import CORS
 from flask_session import Session
 from flask_socketio import SocketIO, emit, join_room as socket_join_room, leave_room as socket_leave_room
@@ -65,8 +65,7 @@ def _build_allowed_origins():
         else:
             origins.add(f"https://{vercel_url.rstrip('/')}")
 
-    # 生产环境避免使用 '*'，否则与凭据场景冲突。
-    return list(origins)
+    # 鐢熶骇鐜閬垮厤浣跨敤 '*'锛屽惁鍒欎笌鍑嵁鍦烘櫙鍐茬獊銆?    return list(origins)
 
 
 def _build_socket_cors_origins():
@@ -74,8 +73,7 @@ def _build_socket_cors_origins():
     if configured:
         return _split_env_csv('SOCKET_CORS_ORIGINS', ALLOWED_ORIGINS)
 
-    # WebRTC 信令不依赖 Cookie，默认放宽到 '*' 可避免预览域名或多域部署导致握手失败。
-    return '*'
+    # WebRTC 淇′护涓嶄緷璧?Cookie锛岄粯璁ゆ斁瀹藉埌 '*' 鍙伩鍏嶉瑙堝煙鍚嶆垨澶氬煙閮ㄧ讲瀵艰嚧鎻℃墜澶辫触銆?    return '*'
 
 
 ALLOWED_ORIGINS = _build_allowed_origins()
@@ -126,15 +124,14 @@ socket_room_map = {}
 room_host_map = {}
 room_state_lock = Lock()
 
-# 配置会话
+# 閰嶇疆浼氳瘽
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_COOKIE_SAMESITE'] = 'None' if IS_PRODUCTION else 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = IS_PRODUCTION
 Session(app)
 
-# 配置数据库
-app.config['SQLALCHEMY_DATABASE_URI'] = _resolve_database_uri()
+# 閰嶇疆鏁版嵁搴?app.config['SQLALCHEMY_DATABASE_URI'] = _resolve_database_uri()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 FRONTEND_BUILD_DIR_CANDIDATES = [
     os.path.abspath(os.path.join(basedir, '..', 'frontend', 'build')),
@@ -181,27 +178,35 @@ def _build_webrtc_ice_servers():
 
     fallback_turn_servers = [
         {
-            'urls': 'turn:turn1.vlines.com:3478',
-            'username': 'turnserver',
-            'credential': 'turnserver',
+            'urls': 'turn:stun.stunprotocol.org:3478',
+            'username': '',
+            'credential': '',
         },
         {
-            'urls': 'turn:turn1.vlines.com:5349?transport=tcp',
-            'username': 'turnserver',
-            'credential': 'turnserver',
+            'urls': 'turn:stun1.stunprotocol.org:3478',
+            'username': '',
+            'credential': '',
         },
         {
-            'urls': 'turns:turn1.vlines.com:5349?transport=tcp',
-            'username': 'turnserver',
-            'credential': 'turnserver',
+            'urls': 'turn:numb.viagenie.ca:3478?transport=udp',
+            'username': 'webrtc@mozilla.org',
+            'credential': 'webrtc',
+        },
+        {
+            'urls': 'turn:numb.viagenie.ca:5349?transport=tcp',
+            'username': 'webrtc@mozilla.org',
+            'credential': 'webrtc',
+        },
+        {
+            'urls': 'turns:numb.viagenie.ca:5349?transport=tcp',
+            'username': 'webrtc@mozilla.org',
+            'credential': 'webrtc',
         },
     ]
 
-    # 即使配置了环境变量 TURN，也追加内置 fallback，避免单一 TURN 不可达导致跨网失败。
-    merged_turn_servers = turn_servers + fallback_turn_servers if turn_servers else fallback_turn_servers
+    # 鍗充娇閰嶇疆浜嗙幆澧冨彉閲?TURN锛屼篃杩藉姞鍐呯疆 fallback锛岄伩鍏嶅崟涓€ TURN 涓嶅彲杈惧鑷磋法缃戝け璐ャ€?    merged_turn_servers = turn_servers + fallback_turn_servers if turn_servers else fallback_turn_servers
 
-    # 按 urls 去重，保持配置稳定。
-    dedup_turn_servers = []
+    # 鎸?urls 鍘婚噸锛屼繚鎸侀厤缃ǔ瀹氥€?    dedup_turn_servers = []
     seen_urls = set()
     for server in merged_turn_servers:
         urls = server.get('urls')
@@ -217,8 +222,7 @@ def _resolve_ice_transport_policy():
     configured = (os.environ.get('ICE_TRANSPORT_POLICY') or os.environ.get('REACT_APP_ICE_TRANSPORT_POLICY') or '').strip().lower()
     if configured in {'relay', 'all'}:
         return configured
-    # 默认走 relay，优先保证跨网可连通；如需直连可显式设置 ICE_TRANSPORT_POLICY=all。
-    return 'relay'
+    # 榛樿璧?relay锛屼紭鍏堜繚璇佽法缃戝彲杩為€氾紱濡傞渶鐩磋繛鍙樉寮忚缃?ICE_TRANSPORT_POLICY=all銆?    return 'relay'
 
 
 @app.get('/api/webrtc-config')
@@ -301,7 +305,7 @@ def _socket_member_payload(sid, role='member'):
     name = (
         user_info.get('name')
         or user_info.get('username')
-        or f'成员 {sid[:6]}'
+        or f'鎴愬憳 {sid[:6]}'
     )
     return {
         'socketId': sid,
@@ -373,7 +377,7 @@ def _remove_socket_from_room(sid, room_id=None, notify=True):
 def handle_join_room(payload):
     room_id = str((payload or {}).get('roomId') or '').strip()
     if not room_id:
-        emit('room-error', {'message': '房间号不能为空'})
+        emit('room-error', {'message': '鎴块棿鍙蜂笉鑳戒负绌?})
         return
 
     previous_room = socket_room_map.get(request.sid)
@@ -424,13 +428,13 @@ def handle_signal(payload):
     signal = (payload or {}).get('signal')
 
     if not target_id or signal is None:
-        emit('room-error', {'message': '信令参数不完整'})
+        emit('room-error', {'message': '淇′护鍙傛暟涓嶅畬鏁?})
         return
 
     sender_room = socket_room_map.get(request.sid)
     target_room = socket_room_map.get(target_id)
     if not sender_room or sender_room != target_room:
-        emit('room-error', {'message': '目标成员不在同一房间'})
+        emit('room-error', {'message': '鐩爣鎴愬憳涓嶅湪鍚屼竴鎴块棿'})
         return
 
     socketio.emit('signal', {'from': request.sid, 'signal': signal}, room=target_id)
@@ -445,7 +449,7 @@ def handle_disconnect():
 
 
 def _split_meeting_sentences(text):
-    parts = re.split(r'[\n。！？!?]+', text or '')
+    parts = re.split(r'[\n銆傦紒锛??]+', text or '')
     return [p.strip() for p in parts if p and p.strip()]
 
 
@@ -455,42 +459,41 @@ def _fallback_meeting_summary(transcript_text):
 
     if sentence_count == 0:
         return {
-            'summary': '本次会议暂无有效语音内容。',
+            'summary': '鏈浼氳鏆傛棤鏈夋晥璇煶鍐呭銆?,
             'key_points': [],
             'action_items': [],
             'provider': 'fallback'
         }
 
-    # 提取常见关键词（简易统计，避免外部依赖）
-    clean_text = re.sub(r'[^\w\u4e00-\u9fff\s]', ' ', transcript_text)
+    # 鎻愬彇甯歌鍏抽敭璇嶏紙绠€鏄撶粺璁★紝閬垮厤澶栭儴渚濊禆锛?    clean_text = re.sub(r'[^\w\u4e00-\u9fff\s]', ' ', transcript_text)
     words = [w.strip().lower() for w in clean_text.split() if len(w.strip()) >= 2]
     stop_words = {
-        '我们', '这个', '那个', '然后', '就是', '已经', '进行', '可以', '需要', '今天',
-        '会议', '一下', '一个', '没有', '你们', '他们', '如果', '因为', '所以', 'and', 'the'
+        '鎴戜滑', '杩欎釜', '閭ｄ釜', '鐒跺悗', '灏辨槸', '宸茬粡', '杩涜', '鍙互', '闇€瑕?, '浠婂ぉ',
+        '浼氳', '涓€涓?, '涓€涓?, '娌℃湁', '浣犱滑', '浠栦滑', '濡傛灉', '鍥犱负', '鎵€浠?, 'and', 'the'
     }
     freq = Counter(w for w in words if w not in stop_words)
     top_keywords = [k for k, _ in freq.most_common(5)]
 
     key_points = sentences[:3]
     if top_keywords:
-        key_points.append('高频关注词：' + '、'.join(top_keywords))
+        key_points.append('楂橀鍏虫敞璇嶏細' + '銆?.join(top_keywords))
 
     action_lines = []
     for s in sentences:
-        if re.search(r'(负责|跟进|完成|确认|提交|安排|同步|deadline|截止|下周|明天)', s, re.IGNORECASE):
+        if re.search(r'(璐熻矗|璺熻繘|瀹屾垚|纭|鎻愪氦|瀹夋帓|鍚屾|deadline|鎴|涓嬪懆|鏄庡ぉ)', s, re.IGNORECASE):
             action_lines.append(s)
 
     action_items = []
     for line in action_lines[:6]:
-        owner_match = re.search(r'([\u4e00-\u9fffA-Za-z0-9_]{2,10})\s*(负责|跟进)', line)
-        deadline_match = re.search(r'(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|本周|下周|明天|后天|月底)', line)
+        owner_match = re.search(r'([\u4e00-\u9fffA-Za-z0-9_]{2,10})\s*(璐熻矗|璺熻繘)', line)
+        deadline_match = re.search(r'(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|鏈懆|涓嬪懆|鏄庡ぉ|鍚庡ぉ|鏈堝簳)', line)
         action_items.append({
-            'owner': owner_match.group(1) if owner_match else '待确认',
+            'owner': owner_match.group(1) if owner_match else '寰呯‘璁?,
             'task': line,
-            'deadline': deadline_match.group(1) if deadline_match else '待定'
+            'deadline': deadline_match.group(1) if deadline_match else '寰呭畾'
         })
 
-    summary = f'本次会议共记录 {sentence_count} 条语句，讨论了任务推进与后续安排。'
+    summary = f'鏈浼氳鍏辫褰?{sentence_count} 鏉¤鍙ワ紝璁ㄨ浜嗕换鍔℃帹杩涗笌鍚庣画瀹夋帓銆?
 
     return {
         'summary': summary,
@@ -509,10 +512,10 @@ def _call_llm_meeting_summary(transcript_text):
     model = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
 
     prompt = (
-        '你是会议纪要助手。请根据会议转写内容输出严格 JSON，结构为: '
+        '浣犳槸浼氳绾鍔╂墜銆傝鏍规嵁浼氳杞啓鍐呭杈撳嚭涓ユ牸 JSON锛岀粨鏋勪负: '
         '{"summary": string, "key_points": string[], "action_items": '
-        '[{"owner": string, "task": string, "deadline": string}]}。'
-        '不要输出 markdown，不要输出多余文字。'
+        '[{"owner": string, "task": string, "deadline": string}]}銆?
+        '涓嶈杈撳嚭 markdown锛屼笉瑕佽緭鍑哄浣欐枃瀛椼€?
     )
 
     payload = {
@@ -559,7 +562,7 @@ def _normalize_action_items(raw_items, fallback_summary=''):
     elif isinstance(items, dict):
         items = [items]
     elif isinstance(items, str) and items.strip():
-        items = [{'task': items.strip(), 'owner': '待确认', 'deadline': '待定'}]
+        items = [{'task': items.strip(), 'owner': '寰呯‘璁?, 'deadline': '寰呭畾'}]
     else:
         items = []
 
@@ -568,28 +571,28 @@ def _normalize_action_items(raw_items, fallback_summary=''):
         if isinstance(item, str):
             text = item.strip()
             if text:
-                normalized.append({'task': text, 'owner': '待确认', 'deadline': '待定'})
+                normalized.append({'task': text, 'owner': '寰呯‘璁?, 'deadline': '寰呭畾'})
             continue
         if not isinstance(item, dict):
             continue
 
-        task = str(item.get('task') or item.get('title') or '').strip() or f'会议行动项 {idx + 1}'
-        owner = str(item.get('owner') or item.get('assignee') or '').strip() or '待确认'
-        deadline = str(item.get('deadline') or item.get('due_date') or '').strip() or '待定'
+        task = str(item.get('task') or item.get('title') or '').strip() or f'浼氳琛屽姩椤?{idx + 1}'
+        owner = str(item.get('owner') or item.get('assignee') or '').strip() or '寰呯‘璁?
+        deadline = str(item.get('deadline') or item.get('due_date') or '').strip() or '寰呭畾'
         normalized.append({'task': task, 'owner': owner, 'deadline': deadline})
 
     if not normalized and fallback_summary:
         normalized.append({
-            'task': f'根据会议摘要跟进：{str(fallback_summary)[:60]}',
-            'owner': '待确认',
-            'deadline': '待定'
+            'task': f'鏍规嵁浼氳鎽樿璺熻繘锛歿str(fallback_summary)[:60]}',
+            'owner': '寰呯‘璁?,
+            'deadline': '寰呭畾'
         })
 
     return normalized
 
 
 def ensure_legacy_schema():
-    """补齐旧版 SQLite 数据库缺失字段，避免升级后登录/注册报错。"""
+    """琛ラ綈鏃х増 SQLite 鏁版嵁搴撶己澶卞瓧娈碉紝閬垮厤鍗囩骇鍚庣櫥褰?娉ㄥ唽鎶ラ敊銆?""
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
     if not db_uri.startswith('sqlite:///'):
         return
@@ -617,31 +620,29 @@ def ensure_legacy_schema():
     finally:
         conn.close()
 
-# 创建数据库表（如果文件损坏则删除重建）
-with app.app_context():
+# 鍒涘缓鏁版嵁搴撹〃锛堝鏋滄枃浠舵崯鍧忓垯鍒犻櫎閲嶅缓锛?with app.app_context():
     try:
         db.create_all()
         ensure_legacy_schema()
-        print("数据库表创建成功！")
+        print("鏁版嵁搴撹〃鍒涘缓鎴愬姛锛?)
     except Exception as e:
-        print("数据库初始化出错：", e)
-        # sqlite 常见的损坏问题，尝试删除文件并重新创建
-        if 'disk image is malformed' in str(e):
+        print("鏁版嵁搴撳垵濮嬪寲鍑洪敊锛?, e)
+        # sqlite 甯歌鐨勬崯鍧忛棶棰橈紝灏濊瘯鍒犻櫎鏂囦欢骞堕噸鏂板垱寤?        if 'disk image is malformed' in str(e):
             db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
             db_path = db_uri.replace('sqlite:///', '', 1) if db_uri.startswith('sqlite:///') else ''
             try:
                 if db_path:
                     os.remove(db_path)
-                print("损坏的数据库已删除，重新创建中…")
+                print("鎹熷潖鐨勬暟鎹簱宸插垹闄わ紝閲嶆柊鍒涘缓涓€?)
                 db.create_all()
-                print("数据库已重新创建。")
+                print("鏁版嵁搴撳凡閲嶆柊鍒涘缓銆?)
             except Exception as exc:
-                print("重新创建数据库失败：", exc)
+                print("閲嶆柊鍒涘缓鏁版嵁搴撳け璐ワ細", exc)
         else:
             raise
 
 
-# 测试路由
+# 娴嬭瘯璺敱
 @app.route('/', methods=['GET'])
 def home():
     index_file = os.path.join(FRONTEND_BUILD_DIR, 'index.html')
@@ -677,26 +678,24 @@ def test():
     return jsonify({"message": "API is working"})
 
 
-# 用户数据现在保存在数据库中，默认账户可以通过初始化脚本创建
-# （如有需要，后续可添加迁移或预填充逻辑）
+# 鐢ㄦ埛鏁版嵁鐜板湪淇濆瓨鍦ㄦ暟鎹簱涓紝榛樿璐︽埛鍙互閫氳繃鍒濆鍖栬剼鏈垱寤?# 锛堝鏈夐渶瑕侊紝鍚庣画鍙坊鍔犺縼绉绘垨棰勫～鍏呴€昏緫锛?
 
-
-# 登录路由
+# 鐧诲綍璺敱
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json or {}
     username = data.get('username')
     password = data.get('password')
     if not username or not password:
-        return jsonify({'success': False, 'message': '用户名和密码不能为空'}), 400
+        return jsonify({'success': False, 'message': '鐢ㄦ埛鍚嶅拰瀵嗙爜涓嶈兘涓虹┖'}), 400
 
     user = User.query.filter_by(username=username).first()
     if user and user.password == password:
         session['user'] = {'id': user.id, 'username': user.username, 'name': user.name}
         token = _make_auth_token(user)
-        return jsonify({'success': True, 'user': user.to_dict(), 'token': token, 'message': '登录成功'})
+        return jsonify({'success': True, 'user': user.to_dict(), 'token': token, 'message': '鐧诲綍鎴愬姛'})
     else:
-        return jsonify({'success': False, 'message': '用户名或密码错误'}), 401
+        return jsonify({'success': False, 'message': '鐢ㄦ埛鍚嶆垨瀵嗙爜閿欒'}), 401
 
 
 @app.route('/api/auth/check', methods=['GET'])
@@ -706,7 +705,7 @@ def check_auth():
         user = User.query.get(uid)
         if not user:
             session.pop('user', None)
-            return jsonify({'error': '用户不存在'}), 401
+            return jsonify({'error': '鐢ㄦ埛涓嶅瓨鍦?}), 401
         token = _make_auth_token(user)
         return jsonify({'user': user.to_dict(), 'token': token})
 
@@ -717,29 +716,29 @@ def check_auth():
             session['user'] = {'id': user.id, 'username': user.username, 'name': user.name}
             return jsonify({'user': user.to_dict(), 'token': token})
 
-    return jsonify({'error': '未登录'}), 401
+    return jsonify({'error': '鏈櫥褰?}), 401
 
 @app.route('/api/profile', methods=['GET'])
 def get_profile():
     if 'user' not in session:
-        return jsonify({'error': '未登录'}), 401
+        return jsonify({'error': '鏈櫥褰?}), 401
     uid = session['user']['id']
     user = User.query.get(uid)
     if not user:
-        return jsonify({'error': '用户不存在'}), 404
+        return jsonify({'error': '鐢ㄦ埛涓嶅瓨鍦?}), 404
     return jsonify({'success': True, 'user': user.to_dict()})
 
 @app.route('/api/profile', methods=['PUT'])
 def update_profile():
     if 'user' not in session:
-        return jsonify({'success': False, 'message': '未登录'}), 401
+        return jsonify({'success': False, 'message': '鏈櫥褰?}), 401
     uid = session['user']['id']
     user = User.query.get(uid)
     if not user:
-        return jsonify({'success': False, 'message': '用户不存在'}), 404
+        return jsonify({'success': False, 'message': '鐢ㄦ埛涓嶅瓨鍦?}), 404
     data = request.get_json(silent=True)
     if data is None:
-        return jsonify({'success': False, 'message': '无效的JSON'}), 400
+        return jsonify({'success': False, 'message': '鏃犳晥鐨凧SON'}), 400
 
     try:
         for field in ['email', 'bio', 'name', 'gender', 'birthdate', 'avatar']:
@@ -752,9 +751,9 @@ def update_profile():
         db.session.rollback()
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'message': f'服务器错误: {str(exc)}'}), 500
+        return jsonify({'success': False, 'message': f'鏈嶅姟鍣ㄩ敊璇? {str(exc)}'}), 500
 
-# 注册路由
+# 娉ㄥ唽璺敱
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.json or {}
@@ -762,9 +761,9 @@ def register():
     password = data.get('password')
 
     if not username or not password:
-        return jsonify({'success': False, 'message': '用户名和密码不能为空'}), 400
+        return jsonify({'success': False, 'message': '鐢ㄦ埛鍚嶅拰瀵嗙爜涓嶈兘涓虹┖'}), 400
     if User.query.filter_by(username=username).first():
-        return jsonify({'success': False, 'message': '用户名已存在'}), 400
+        return jsonify({'success': False, 'message': '鐢ㄦ埛鍚嶅凡瀛樺湪'}), 400
 
     try:
         new_user = User(
@@ -782,25 +781,25 @@ def register():
 
         session['user'] = {'id': new_user.id, 'username': new_user.username, 'name': new_user.name}
         token = _make_auth_token(new_user)
-        return jsonify({'success': True, 'user': new_user.to_dict(), 'token': token, 'message': '注册成功'})
+        return jsonify({'success': True, 'user': new_user.to_dict(), 'token': token, 'message': '娉ㄥ唽鎴愬姛'})
     except Exception as exc:
         db.session.rollback()
         # log exception
         print('register error', exc)
-        return jsonify({'success': False, 'message': '注册失败，请稍后再试'}), 500
+        return jsonify({'success': False, 'message': '娉ㄥ唽澶辫触锛岃绋嶅悗鍐嶈瘯'}), 500
 
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
     session.pop('user', None)
-    return jsonify({'success': True, 'message': '已退出登录'})
+    return jsonify({'success': True, 'message': '宸查€€鍑虹櫥褰?})
 
 
 @app.route('/api/events', methods=['GET'])
 def get_events():
-    """获取当前登录用户的事件，支持按年月过滤"""
+    """鑾峰彇褰撳墠鐧诲綍鐢ㄦ埛鐨勪簨浠讹紝鏀寔鎸夊勾鏈堣繃婊?""
     if 'user' not in session:
-        return jsonify({"error": "请先登录"}), 401
+        return jsonify({"error": "璇峰厛鐧诲綍"}), 401
     uid = session['user']['id']
     try:
         year = request.args.get('year')
@@ -822,27 +821,27 @@ def get_events():
         events = query.all()
         return jsonify([event.to_dict(include_user=True) for event in events])
     except Exception as e:
-        print(f"错误: {str(e)}")
+        print(f"閿欒: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/events/<int:event_id>', methods=['GET'])
 def get_event(event_id):
-    """获取单个事件（仅限自己的事件）"""
+    """鑾峰彇鍗曚釜浜嬩欢锛堜粎闄愯嚜宸辩殑浜嬩欢锛?""
     if 'user' not in session:
-        return jsonify({"error": "请先登录"}), 401
+        return jsonify({"error": "璇峰厛鐧诲綍"}), 401
     uid = session['user']['id']
     event = Event.query.get_or_404(event_id)
     if event.user_id != uid:
-        return jsonify({"error": "无权访问此事件"}), 403
+        return jsonify({"error": "鏃犳潈璁块棶姝や簨浠?}), 403
     return jsonify(event.to_dict(include_user=True))
 
 
 @app.route('/api/events', methods=['POST'])
 def create_event():
-    """创建新事件并关联当前用户"""
+    """鍒涘缓鏂颁簨浠跺苟鍏宠仈褰撳墠鐢ㄦ埛"""
     if 'user' not in session:
-        return jsonify({"error": "请先登录"}), 401
+        return jsonify({"error": "璇峰厛鐧诲綍"}), 401
     uid = session['user']['id']
     try:
         data = request.json or {}
@@ -864,21 +863,21 @@ def create_event():
         db.session.commit()
         return jsonify(event.to_dict()), 201
     except Exception as e:
-        print(f"创建事件错误: {str(e)}")
+        print(f"鍒涘缓浜嬩欢閿欒: {str(e)}")
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
 
 @app.route('/api/events/<int:event_id>', methods=['PUT'])
 def update_event(event_id):
-    """更新事件，仅限所属用户"""
+    """鏇存柊浜嬩欢锛屼粎闄愭墍灞炵敤鎴?""
     if 'user' not in session:
-        return jsonify({"error": "请先登录"}), 401
+        return jsonify({"error": "璇峰厛鐧诲綍"}), 401
     uid = session['user']['id']
     try:
         event = Event.query.get_or_404(event_id)
         if event.user_id != uid:
-            return jsonify({"error": "无权修改此事件"}), 403
+            return jsonify({"error": "鏃犳潈淇敼姝や簨浠?}), 403
         data = request.json or {}
 
         event.title = data.get('title', event.title)
@@ -904,14 +903,14 @@ def update_event(event_id):
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
 def delete_event(event_id):
-    """删除事件，仅限所属用户"""
+    """鍒犻櫎浜嬩欢锛屼粎闄愭墍灞炵敤鎴?""
     if 'user' not in session:
-        return jsonify({"error": "请先登录"}), 401
+        return jsonify({"error": "璇峰厛鐧诲綍"}), 401
     uid = session['user']['id']
     try:
         event = Event.query.get_or_404(event_id)
         if event.user_id != uid:
-            return jsonify({"error": "无权删除此事件"}), 403
+            return jsonify({"error": "鏃犳潈鍒犻櫎姝や簨浠?}), 403
         db.session.delete(event)
         db.session.commit()
         return jsonify({'success': True})
@@ -920,15 +919,14 @@ def delete_event(event_id):
         return jsonify({"error": str(e)}), 400
 
 
-# 返回当前用户的个人信息以及所有事件
-@app.route('/api/user-data', methods=['GET'])
+# 杩斿洖褰撳墠鐢ㄦ埛鐨勪釜浜轰俊鎭互鍙婃墍鏈変簨浠?@app.route('/api/user-data', methods=['GET'])
 def user_data():
     if 'user' not in session:
-        return jsonify({"error": "请先登录"}), 401
+        return jsonify({"error": "璇峰厛鐧诲綍"}), 401
     uid = session['user']['id']
     user = User.query.get(uid)
     if not user:
-        return jsonify({"error": "用户不存在"}), 404
+        return jsonify({"error": "鐢ㄦ埛涓嶅瓨鍦?}), 404
     events = Event.query.filter_by(user_id=uid).all()
     return jsonify({
         'user': user.to_dict(),
@@ -943,7 +941,7 @@ def user_data():
 def dashboard_summary():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     events_count = Event.query.filter_by(user_id=uid).count()
     task_query = Task.query.filter((Task.creator_id == uid) | (Task.assignee_id == uid))
@@ -967,11 +965,11 @@ def dashboard_summary():
 def update_status():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     user = User.query.get(uid)
     if not user:
-        return jsonify({'error': '用户不存在'}), 404
+        return jsonify({'error': '鐢ㄦ埛涓嶅瓨鍦?}), 404
 
     data = request.json or {}
     user.status = str(data.get('status', ''))[:200]
@@ -983,7 +981,7 @@ def update_status():
 def get_teams():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     memberships = TeamMember.query.filter_by(user_id=uid).all()
     teams = [m.team.to_dict() for m in memberships if m.team]
@@ -994,12 +992,12 @@ def get_teams():
 def create_team():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
     name = (data.get('name') or '').strip()
     if not name:
-        return jsonify({'error': '团队名称不能为空'}), 400
+        return jsonify({'error': '鍥㈤槦鍚嶇О涓嶈兘涓虹┖'}), 400
 
     team = Team(name=name, owner_id=uid)
     db.session.add(team)
@@ -1016,9 +1014,9 @@ def create_team():
 def get_team_members(team_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
     if not is_team_member(team_id, uid):
-        return jsonify({'error': '无权访问该团队'}), 403
+        return jsonify({'error': '鏃犳潈璁块棶璇ュ洟闃?}), 403
 
     members = TeamMember.query.filter_by(team_id=team_id).all()
     return jsonify([m.to_dict() for m in members])
@@ -1028,21 +1026,21 @@ def get_team_members(team_id):
 def add_team_member(team_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     membership = TeamMember.query.filter_by(team_id=team_id, user_id=uid).first()
     if not membership or membership.role not in ['owner', 'manager']:
-        return jsonify({'error': '仅团队管理员可添加成员'}), 403
+        return jsonify({'error': '浠呭洟闃熺鐞嗗憳鍙坊鍔犳垚鍛?}), 403
 
     data = request.json or {}
     username = (data.get('username') or '').strip()
     role = (data.get('role') or 'member').strip()
     target = User.query.filter_by(username=username).first()
     if not target:
-        return jsonify({'error': '用户不存在'}), 404
+        return jsonify({'error': '鐢ㄦ埛涓嶅瓨鍦?}), 404
 
     if TeamMember.query.filter_by(team_id=team_id, user_id=target.id).first():
-        return jsonify({'error': '该用户已在团队中'}), 400
+        return jsonify({'error': '璇ョ敤鎴峰凡鍦ㄥ洟闃熶腑'}), 400
 
     m = TeamMember(team_id=team_id, user_id=target.id, role=role)
     db.session.add(m)
@@ -1054,7 +1052,7 @@ def add_team_member(team_id):
 def get_tasks():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     team_id = request.args.get('team_id', type=int)
     status = request.args.get('status')
@@ -1073,21 +1071,21 @@ def get_tasks():
 def create_task():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
     title = (data.get('title') or '').strip()
     if not title:
-        return jsonify({'error': '任务标题不能为空'}), 400
+        return jsonify({'error': '浠诲姟鏍囬涓嶈兘涓虹┖'}), 400
 
     team_id = data.get('team_id')
     assignee_id = data.get('assignee_id') or uid
 
     if team_id and not is_team_member(team_id, uid):
-        return jsonify({'error': '无权在该团队创建任务'}), 403
+        return jsonify({'error': '鏃犳潈鍦ㄨ鍥㈤槦鍒涘缓浠诲姟'}), 403
 
     if assignee_id and not User.query.get(assignee_id):
-        return jsonify({'error': '被分配用户不存在'}), 404
+        return jsonify({'error': '琚垎閰嶇敤鎴蜂笉瀛樺湪'}), 404
 
     task = Task(
         title=title,
@@ -1108,11 +1106,11 @@ def create_task():
 def update_task(task_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     task = Task.query.get_or_404(task_id)
     if uid not in [task.creator_id, task.assignee_id]:
-        return jsonify({'error': '无权修改该任务'}), 403
+        return jsonify({'error': '鏃犳潈淇敼璇ヤ换鍔?}), 403
 
     data = request.json or {}
     for field in ['title', 'description', 'status', 'priority', 'due_date']:
@@ -1121,7 +1119,7 @@ def update_task(task_id):
 
     if 'assignee_id' in data:
         if data['assignee_id'] and not User.query.get(data['assignee_id']):
-            return jsonify({'error': '被分配用户不存在'}), 404
+            return jsonify({'error': '琚垎閰嶇敤鎴蜂笉瀛樺湪'}), 404
         task.assignee_id = data['assignee_id']
 
     db.session.commit()
@@ -1132,11 +1130,11 @@ def update_task(task_id):
 def delete_task(task_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     task = Task.query.get_or_404(task_id)
     if uid != task.creator_id:
-        return jsonify({'error': '仅创建者可以删除任务'}), 403
+        return jsonify({'error': '浠呭垱寤鸿€呭彲浠ュ垹闄や换鍔?}), 403
 
     db.session.delete(task)
     db.session.commit()
@@ -1147,7 +1145,7 @@ def delete_task(task_id):
 def search_users_for_contact():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     keyword = (request.args.get('q') or '').strip()
     if not keyword:
@@ -1161,7 +1159,7 @@ def search_users_for_contact():
 def get_contacts():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     contacts = Contact.query.filter_by(user_id=uid).order_by(Contact.created_at.desc()).all()
     return jsonify([c.to_dict() for c in contacts])
@@ -1171,21 +1169,21 @@ def get_contacts():
 def create_contact():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
     contact_user_id = data.get('contact_user_id')
     if not contact_user_id:
-        return jsonify({'error': '请选择联系人'}), 400
+        return jsonify({'error': '璇烽€夋嫨鑱旂郴浜?}), 400
     if contact_user_id == uid:
-        return jsonify({'error': '不能添加自己'}), 400
+        return jsonify({'error': '涓嶈兘娣诲姞鑷繁'}), 400
 
     target = User.query.get(contact_user_id)
     if not target:
-        return jsonify({'error': '联系人不存在'}), 404
+        return jsonify({'error': '鑱旂郴浜轰笉瀛樺湪'}), 404
 
     if Contact.query.filter_by(user_id=uid, contact_user_id=contact_user_id).first():
-        return jsonify({'error': '联系人已存在'}), 400
+        return jsonify({'error': '鑱旂郴浜哄凡瀛樺湪'}), 400
 
     pending_request = FriendRequest.query.filter_by(
         requester_id=uid,
@@ -1193,7 +1191,7 @@ def create_contact():
         status='pending'
     ).first()
     if pending_request:
-        return jsonify({'error': '好友申请已发送，请等待对方处理'}), 400
+        return jsonify({'error': '濂藉弸鐢宠宸插彂閫侊紝璇风瓑寰呭鏂瑰鐞?}), 400
 
     friend_request = FriendRequest(
         requester_id=uid,
@@ -1204,14 +1202,14 @@ def create_contact():
     )
     db.session.add(friend_request)
     db.session.commit()
-    return jsonify({'message': '好友申请已发送', 'request': friend_request.to_dict()}), 201
+    return jsonify({'message': '濂藉弸鐢宠宸插彂閫?, 'request': friend_request.to_dict()}), 201
 
 
 @app.route('/api/contact-requests/incoming', methods=['GET'])
 def get_incoming_contact_requests():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     requests = FriendRequest.query.filter_by(receiver_id=uid, status='pending') \
         .order_by(FriendRequest.created_at.desc()).all()
@@ -1222,7 +1220,7 @@ def get_incoming_contact_requests():
 def get_outgoing_contact_requests():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     requests = FriendRequest.query.filter_by(requester_id=uid, status='pending') \
         .order_by(FriendRequest.created_at.desc()).all()
@@ -1233,18 +1231,18 @@ def get_outgoing_contact_requests():
 def respond_contact_request(request_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     friend_request = FriendRequest.query.get_or_404(request_id)
     if friend_request.receiver_id != uid:
-        return jsonify({'error': '无权处理该申请'}), 403
+        return jsonify({'error': '鏃犳潈澶勭悊璇ョ敵璇?}), 403
     if friend_request.status != 'pending':
-        return jsonify({'error': '该申请已处理'}), 400
+        return jsonify({'error': '璇ョ敵璇峰凡澶勭悊'}), 400
 
     data = request.json or {}
     action = (data.get('action') or '').strip().lower()
     if action not in ['accepted', 'rejected']:
-        return jsonify({'error': '无效操作'}), 400
+        return jsonify({'error': '鏃犳晥鎿嶄綔'}), 400
 
     if action == 'accepted':
         requester_to_receiver = Contact.query.filter_by(
@@ -1276,18 +1274,18 @@ def respond_contact_request(request_id):
     friend_request.status = action
     friend_request.responded_at = datetime.utcnow()
     db.session.commit()
-    return jsonify({'message': '好友申请已处理', 'request': friend_request.to_dict()})
+    return jsonify({'message': '濂藉弸鐢宠宸插鐞?, 'request': friend_request.to_dict()})
 
 
 @app.route('/api/contacts/<int:contact_id>', methods=['PUT'])
 def update_contact(contact_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     contact = Contact.query.get_or_404(contact_id)
     if contact.user_id != uid:
-        return jsonify({'error': '无权修改该联系人'}), 403
+        return jsonify({'error': '鏃犳潈淇敼璇ヨ仈绯讳汉'}), 403
 
     data = request.json or {}
     for field in ['tag', 'note', 'is_favorite']:
@@ -1302,11 +1300,11 @@ def update_contact(contact_id):
 def delete_contact(contact_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     contact = Contact.query.get_or_404(contact_id)
     if contact.user_id != uid:
-        return jsonify({'error': '无权删除该联系人'}), 403
+        return jsonify({'error': '鏃犳潈鍒犻櫎璇ヨ仈绯讳汉'}), 403
 
     db.session.delete(contact)
     db.session.commit()
@@ -1317,7 +1315,7 @@ def delete_contact(contact_id):
 def create_remote_control_request():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
     target_user_id = data.get('target_user_id')
@@ -1326,21 +1324,20 @@ def create_remote_control_request():
     except (TypeError, ValueError):
         target_user_id = None
     if not target_user_id:
-        return jsonify({'error': '请选择联系人'}), 400
+        return jsonify({'error': '璇烽€夋嫨鑱旂郴浜?}), 400
     if target_user_id == uid:
-        return jsonify({'error': '不能向自己发起远程操控'}), 400
+        return jsonify({'error': '涓嶈兘鍚戣嚜宸卞彂璧疯繙绋嬫搷鎺?}), 400
 
     target_user = User.query.get(target_user_id)
     if not target_user:
-        return jsonify({'error': '目标用户不存在'}), 404
+        return jsonify({'error': '鐩爣鐢ㄦ埛涓嶅瓨鍦?}), 404
 
-    # 仅允许联系人之间发起远程操控请求，降低误发风险
-    relation = Contact.query.filter_by(user_id=uid, contact_user_id=target_user_id).first() or Contact.query.filter_by(
+    # 浠呭厑璁歌仈绯讳汉涔嬮棿鍙戣捣杩滅▼鎿嶆帶璇锋眰锛岄檷浣庤鍙戦闄?    relation = Contact.query.filter_by(user_id=uid, contact_user_id=target_user_id).first() or Contact.query.filter_by(
         user_id=target_user_id,
         contact_user_id=uid,
     ).first()
     if not relation:
-        return jsonify({'error': '仅可向通讯录联系人发起远程操控请求'}), 403
+        return jsonify({'error': '浠呭彲鍚戦€氳褰曡仈绯讳汉鍙戣捣杩滅▼鎿嶆帶璇锋眰'}), 403
 
     pending = RemoteControlRequest.query.filter(
         RemoteControlRequest.status == 'pending',
@@ -1356,7 +1353,7 @@ def create_remote_control_request():
         )
     ).first()
     if pending:
-        return jsonify({'error': '已有待处理远程操控请求'}), 400
+        return jsonify({'error': '宸叉湁寰呭鐞嗚繙绋嬫搷鎺ц姹?}), 400
 
     room_id = str(data.get('room_id') or '').strip()
     if not room_id:
@@ -1371,14 +1368,14 @@ def create_remote_control_request():
     )
     db.session.add(control_request)
     db.session.commit()
-    return jsonify({'message': '远程操控请求已发送', 'request': control_request.to_dict()}), 201
+    return jsonify({'message': '杩滅▼鎿嶆帶璇锋眰宸插彂閫?, 'request': control_request.to_dict()}), 201
 
 
 @app.route('/api/remote-control-requests/incoming', methods=['GET'])
 def get_incoming_remote_control_requests():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     requests = RemoteControlRequest.query.filter_by(target_user_id=uid, status='pending') \
         .order_by(RemoteControlRequest.created_at.desc()).all()
@@ -1389,7 +1386,7 @@ def get_incoming_remote_control_requests():
 def get_outgoing_remote_control_requests():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     requests = RemoteControlRequest.query.filter_by(requester_id=uid, status='pending') \
         .order_by(RemoteControlRequest.created_at.desc()).all()
@@ -1400,30 +1397,30 @@ def get_outgoing_remote_control_requests():
 def respond_remote_control_request(request_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     control_request = RemoteControlRequest.query.get_or_404(request_id)
     if control_request.target_user_id != uid:
-        return jsonify({'error': '无权处理该请求'}), 403
+        return jsonify({'error': '鏃犳潈澶勭悊璇ヨ姹?}), 403
     if control_request.status != 'pending':
-        return jsonify({'error': '该请求已处理'}), 400
+        return jsonify({'error': '璇ヨ姹傚凡澶勭悊'}), 400
 
     data = request.json or {}
     action = (data.get('action') or '').strip().lower()
     if action not in ['accepted', 'rejected']:
-        return jsonify({'error': '无效操作'}), 400
+        return jsonify({'error': '鏃犳晥鎿嶄綔'}), 400
 
     control_request.status = action
     control_request.responded_at = datetime.utcnow()
     db.session.commit()
-    return jsonify({'message': '远程操控请求已处理', 'request': control_request.to_dict()})
+    return jsonify({'message': '杩滅▼鎿嶆帶璇锋眰宸插鐞?, 'request': control_request.to_dict()})
 
 
 @app.route('/api/posts', methods=['GET'])
 def get_posts():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     scope = request.args.get('scope')
     category = request.args.get('category')
@@ -1442,16 +1439,16 @@ def get_posts():
 def create_post():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
     content = (data.get('content') or '').strip()
     if not content:
-        return jsonify({'error': '动态内容不能为空'}), 400
+        return jsonify({'error': '鍔ㄦ€佸唴瀹逛笉鑳戒负绌?}), 400
 
     post = Post(
         user_id=uid,
-        category=data.get('category') or '工作动态',
+        category=data.get('category') or '宸ヤ綔鍔ㄦ€?,
         content=content,
     )
     db.session.add(post)
@@ -1463,7 +1460,7 @@ def create_post():
 def like_post(post_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     post = Post.query.get_or_404(post_id)
     post.likes = max(0, (post.likes or 0) + 1)
@@ -1475,13 +1472,13 @@ def like_post(post_id):
 def create_post_comment(post_id):
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     post = Post.query.get_or_404(post_id)
     data = request.json or {}
     content = (data.get('content') or '').strip()
     if not content:
-        return jsonify({'error': '评论不能为空'}), 400
+        return jsonify({'error': '璇勮涓嶈兘涓虹┖'}), 400
 
     comment = PostComment(post_id=post.id, user_id=uid, content=content)
     db.session.add(comment)
@@ -1493,10 +1490,10 @@ def create_post_comment(post_id):
 def assistant_suggest_schedule():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
-    preferred_days = data.get('preferred_days') or ['周一', '周二', '周三', '周四', '周五']
+    preferred_days = data.get('preferred_days') or ['鍛ㄤ竴', '鍛ㄤ簩', '鍛ㄤ笁', '鍛ㄥ洓', '鍛ㄤ簲']
     duration = int(data.get('duration', 60))
     hour_start = int(data.get('hour_start', 9))
     hour_end = int(data.get('hour_end', 18))
@@ -1510,7 +1507,7 @@ def assistant_suggest_schedule():
 
     suggestions = []
     now = datetime.now()
-    day_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    day_names = ['鍛ㄤ竴', '鍛ㄤ簩', '鍛ㄤ笁', '鍛ㄥ洓', '鍛ㄤ簲', '鍛ㄥ叚', '鍛ㄦ棩']
 
     for offset in range(1, 15):
         dt = now.date().fromordinal(now.date().toordinal() + offset)
@@ -1527,7 +1524,7 @@ def assistant_suggest_schedule():
                 'date': dt.strftime('%Y-%m-%d'),
                 'start_time': slot,
                 'duration_minutes': duration,
-                'reason': '根据你最近日程空档自动推荐',
+                'reason': '鏍规嵁浣犳渶杩戞棩绋嬬┖妗ｈ嚜鍔ㄦ帹鑽?,
             })
             if len(suggestions) >= 5:
                 return jsonify({'suggestions': suggestions})
@@ -1539,26 +1536,26 @@ def assistant_suggest_schedule():
 def assistant_task_plan():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
     text = (data.get('text') or '').strip()
     if not text:
-        return jsonify({'error': '请输入任务描述'}), 400
+        return jsonify({'error': '璇疯緭鍏ヤ换鍔℃弿杩?}), 400
 
     checkpoints = []
-    for idx, seg in enumerate([s.strip() for s in text.replace('，', ',').split(',') if s.strip()], start=1):
-        checkpoints.append({'step': idx, 'title': seg, 'eta': f'{idx} 天内'})
+    for idx, seg in enumerate([s.strip() for s in text.replace('锛?, ',').split(',') if s.strip()], start=1):
+        checkpoints.append({'step': idx, 'title': seg, 'eta': f'{idx} 澶╁唴'})
 
     if not checkpoints:
         checkpoints = [
-            {'step': 1, 'title': '明确目标与验收标准', 'eta': '1 天内'},
-            {'step': 2, 'title': '拆分任务并分配负责人', 'eta': '2 天内'},
-            {'step': 3, 'title': '执行与每日同步进度', 'eta': '3-5 天'},
+            {'step': 1, 'title': '鏄庣‘鐩爣涓庨獙鏀舵爣鍑?, 'eta': '1 澶╁唴'},
+            {'step': 2, 'title': '鎷嗗垎浠诲姟骞跺垎閰嶈礋璐ｄ汉', 'eta': '2 澶╁唴'},
+            {'step': 3, 'title': '鎵ц涓庢瘡鏃ュ悓姝ヨ繘搴?, 'eta': '3-5 澶?},
         ]
 
     return jsonify({
-        'summary': '已根据输入生成执行计划，建议同步到任务列表并设置截止日期。',
+        'summary': '宸叉牴鎹緭鍏ョ敓鎴愭墽琛岃鍒掞紝寤鸿鍚屾鍒颁换鍔″垪琛ㄥ苟璁剧疆鎴鏃ユ湡銆?,
         'checkpoints': checkpoints,
     })
 
@@ -1567,7 +1564,7 @@ def assistant_task_plan():
 def assistant_meeting_summary():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
     transcript = data.get('transcript', '')
@@ -1577,7 +1574,7 @@ def assistant_meeting_summary():
         transcript_text = str(transcript).strip()
 
     if len(transcript_text) < 10:
-        return jsonify({'error': '会议内容过少，无法生成摘要'}), 400
+        return jsonify({'error': '浼氳鍐呭杩囧皯锛屾棤娉曠敓鎴愭憳瑕?}), 400
 
     llm_result = _call_llm_meeting_summary(transcript_text)
     result = llm_result if llm_result else _fallback_meeting_summary(transcript_text)
@@ -1600,12 +1597,12 @@ def assistant_meeting_summary():
 def assistant_meeting_tasks():
     uid = current_user_id()
     if not uid:
-        return jsonify({'error': '请先登录'}), 401
+        return jsonify({'error': '璇峰厛鐧诲綍'}), 401
 
     data = request.json or {}
     action_items = _normalize_action_items(data.get('action_items') or [], data.get('summary') or '')
     if len(action_items) == 0:
-        return jsonify({'error': '缺少行动项，无法生成任务'}), 400
+        return jsonify({'error': '缂哄皯琛屽姩椤癸紝鏃犳硶鐢熸垚浠诲姟'}), 400
 
     member_user_ids = []
     raw_member_ids = data.get('member_user_ids') or []
@@ -1616,8 +1613,7 @@ def assistant_meeting_tasks():
             except (TypeError, ValueError):
                 continue
 
-    # 创建者默认纳入任务分配池，确保至少有可分配成员
-    if uid not in member_user_ids:
+    # 鍒涘缓鑰呴粯璁ょ撼鍏ヤ换鍔″垎閰嶆睜锛岀‘淇濊嚦灏戞湁鍙垎閰嶆垚鍛?    if uid not in member_user_ids:
         member_user_ids.append(uid)
 
     valid_members = [u.id for u in User.query.filter(User.id.in_(member_user_ids)).all()]
@@ -1639,18 +1635,18 @@ def assistant_meeting_tasks():
 
             title = str(item.get('task') or '').strip()
             if not title:
-                title = f'会议行动项 {idx + 1}'
+                title = f'浼氳琛屽姩椤?{idx + 1}'
 
             deadline = str(item.get('deadline') or '').strip()
-            owner = str(item.get('owner') or '').strip() or '待确认'
+            owner = str(item.get('owner') or '').strip() or '寰呯‘璁?
             assignee_id = valid_members[idx % len(valid_members)]
 
             task = Task(
                 title=title[:150],
                 description=(
-                    f'来源：会议摘要{f"（房间 {room_id}）" if room_id else ""}\n'
-                    f'建议负责人：{owner}\n'
-                    f'原始截止：{deadline or "待定"}'
+                    f'鏉ユ簮锛氫細璁憳瑕亄f"锛堟埧闂?{room_id}锛? if room_id else ""}\n'
+                    f'寤鸿璐熻矗浜猴細{owner}\n'
+                    f'鍘熷鎴锛歿deadline or "寰呭畾"}'
                 ),
                 status='todo',
                 priority='medium',
@@ -1666,7 +1662,7 @@ def assistant_meeting_tasks():
     except Exception as exc:
         db.session.rollback()
         print('assistant_meeting_tasks error:', exc)
-        return jsonify({'error': f'生成团队任务失败: {str(exc)}'}), 500
+        return jsonify({'error': f'鐢熸垚鍥㈤槦浠诲姟澶辫触: {str(exc)}'}), 500
 
     return jsonify({
         'success': True,
@@ -1679,9 +1675,9 @@ def assistant_meeting_tasks():
 
 
 if __name__ == '__main__':
-    print("启动日历API服务器...")
-    print("访问 http://localhost:5000 测试API")
-    print("访问 http://localhost:5000/api/events 获取事件")
+    print("鍚姩鏃ュ巻API鏈嶅姟鍣?..")
+    print("璁块棶 http://localhost:5000 娴嬭瘯API")
+    print("璁块棶 http://localhost:5000/api/events 鑾峰彇浜嬩欢")
     socketio.run(
         app,
         debug=True,

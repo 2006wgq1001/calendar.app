@@ -181,24 +181,19 @@ def _build_webrtc_ice_servers():
 
     fallback_turn_servers = [
         {
-            'urls': 'turn:openrelay.metered.ca:80',
-            'username': 'openrelayproject',
-            'credential': 'openrelayproject',
+            'urls': 'turn:turn1.vlines.com:3478',
+            'username': 'turnserver',
+            'credential': 'turnserver',
         },
         {
-            'urls': 'turn:openrelay.metered.ca:443',
-            'username': 'openrelayproject',
-            'credential': 'openrelayproject',
+            'urls': 'turn:turn1.vlines.com:5349?transport=tcp',
+            'username': 'turnserver',
+            'credential': 'turnserver',
         },
         {
-            'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
-            'username': 'openrelayproject',
-            'credential': 'openrelayproject',
-        },
-        {
-            'urls': 'turns:openrelay.metered.ca:443?transport=tcp',
-            'username': 'openrelayproject',
-            'credential': 'openrelayproject',
+            'urls': 'turns:turn1.vlines.com:5349?transport=tcp',
+            'username': 'turnserver',
+            'credential': 'turnserver',
         },
     ]
 

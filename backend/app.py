@@ -214,7 +214,10 @@ def _build_webrtc_ice_servers():
 
 def _resolve_ice_transport_policy():
     configured = (os.environ.get('ICE_TRANSPORT_POLICY') or os.environ.get('REACT_APP_ICE_TRANSPORT_POLICY') or '').strip().lower()
-    return 'relay' if configured == 'relay' else 'all'
+    if configured in {'relay', 'all'}:
+        return configured
+    # 默认走 relay，优先保证跨网可连通；如需直连可显式设置 ICE_TRANSPORT_POLICY=all。
+    return 'relay'
 
 
 @app.get('/api/webrtc-config')

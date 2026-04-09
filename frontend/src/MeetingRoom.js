@@ -66,9 +66,9 @@ const resolveSignalUrlWithFallback = () => {
 
 const SIGNAL_URL = resolveSignalUrlWithFallback();
 const SOCKET_IO_PATH = (process.env.REACT_APP_SOCKET_PATH || '/socket.io').trim() || '/socket.io';
-const DEFAULT_ICE_TRANSPORT_POLICY = ((process.env.REACT_APP_ICE_TRANSPORT_POLICY || 'all').trim().toLowerCase() === 'relay')
-  ? 'relay'
-  : 'all';
+const DEFAULT_ICE_TRANSPORT_POLICY = ((process.env.REACT_APP_ICE_TRANSPORT_POLICY || 'relay').trim().toLowerCase() === 'all')
+  ? 'all'
+  : 'relay';
 
 const DEFAULT_RTC_ICE_SERVERS = (() => {
   const stunDefaults = [

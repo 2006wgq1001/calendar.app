@@ -16,4 +16,4 @@ services:
       - key: SOCKET_CORS_ORIGINS
         value: "*"
       - key: ICE_TRANSPORT_POLICY
-        value: all
+        value: relay

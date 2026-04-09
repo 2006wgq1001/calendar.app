@@ -20,9 +20,12 @@ const shouldUseLocalBackendPort =
 	isLocalhost ||
 	(window.location.port === '3000' && isPrivateIpv4Host(window.location.hostname));
 
+const defaultPublicApiBaseURL = (process.env.REACT_APP_DEFAULT_PUBLIC_API_BASE_URL || 'https://calendarapp-production-d085.up.railway.app/api').trim();
+const preferSameOriginApi = window.location.hostname.endsWith('railway.app');
+
 const defaultBaseURL = shouldUseLocalBackendPort
 	? `${window.location.protocol}//${window.location.hostname}:5000/api`
-	: '/api';
+	: (preferSameOriginApi ? '/api' : defaultPublicApiBaseURL);
 // 使用环境变量中的 API 基础 URL，确保前端能正确连接到后端
 axios.defaults.baseURL = envBaseURL || defaultBaseURL;
 axios.defaults.withCredentials = true; // 允许发送cookies

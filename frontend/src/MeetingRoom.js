@@ -44,7 +44,27 @@ const resolveSignalUrl = () => {
   return window.location.origin;
 };
 
-const SIGNAL_URL = resolveSignalUrl();
+const defaultPublicSignalUrl = (process.env.REACT_APP_DEFAULT_PUBLIC_SIGNAL_URL || 'https://calendarapp-production-d085.up.railway.app').trim();
+
+const resolveSignalUrlWithFallback = () => {
+  const resolved = resolveSignalUrl();
+  const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  const isRailwayHost = window.location.hostname.endsWith('railway.app');
+
+  if (isLocal || isRailwayHost) {
+    return resolved;
+  }
+
+  // 在纯静态站点（如 vercel）且未显式配置信令地址时，回退到可公网访问的后端域名。
+  const explicitSignalUrl = (process.env.REACT_APP_SIGNAL_URL || '').trim();
+  if (!explicitSignalUrl && defaultPublicSignalUrl) {
+    return defaultPublicSignalUrl;
+  }
+
+  return resolved;
+};
+
+const SIGNAL_URL = resolveSignalUrlWithFallback();
 const SOCKET_IO_PATH = (process.env.REACT_APP_SOCKET_PATH || '/socket.io').trim() || '/socket.io';
 const DEFAULT_ICE_TRANSPORT_POLICY = ((process.env.REACT_APP_ICE_TRANSPORT_POLICY || 'all').trim().toLowerCase() === 'relay')
   ? 'relay'

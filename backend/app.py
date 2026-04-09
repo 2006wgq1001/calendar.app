@@ -15,6 +15,8 @@ from urllib.error import URLError, HTTPError
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from sqlalchemy import and_, or_
 
+basedir = os.path.abspath(os.path.dirname(__file__))
+
 
 def _split_env_csv(name, default_values):
     raw = (os.environ.get(name) or '').strip()
@@ -78,6 +80,32 @@ ALLOWED_ORIGINS = _build_allowed_origins()
 CORS_ORIGINS_FOR_FLASK = ALLOWED_ORIGINS
 SOCKET_CORS_ORIGINS = _build_socket_cors_origins()
 
+
+def _resolve_sqlite_db_path():
+    configured = (os.environ.get('SQLITE_PATH') or '').strip()
+    if configured:
+        return configured
+    return os.path.join(basedir, 'database.db')
+
+
+def _resolve_database_uri():
+    configured_url = (
+        (os.environ.get('DATABASE_URL') or '').strip()
+        or (os.environ.get('POSTGRES_URL') or '').strip()
+        or (os.environ.get('RAILWAY_DATABASE_URL') or '').strip()
+    )
+
+    if configured_url:
+        if configured_url.startswith('postgres://'):
+            configured_url = 'postgresql://' + configured_url[len('postgres://'):]
+        return configured_url
+
+    sqlite_path = _resolve_sqlite_db_path()
+    sqlite_dir = os.path.dirname(sqlite_path)
+    if sqlite_dir:
+        os.makedirs(sqlite_dir, exist_ok=True)
+    return 'sqlite:///' + sqlite_path
+
 app = Flask(__name__, static_folder=None)
 CORS(app, 
     origins=CORS_ORIGINS_FOR_FLASK,
@@ -104,8 +132,7 @@ app.config['SESSION_COOKIE_SECURE'] = IS_PRODUCTION
 Session(app)
 
 # 配置数据库
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = _resolve_database_uri()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 FRONTEND_BUILD_DIR_CANDIDATES = [
     os.path.abspath(os.path.join(basedir, '..', 'frontend', 'build')),
@@ -152,22 +179,22 @@ def _build_webrtc_ice_servers():
 
     fallback_turn_servers = [
         {
-            'urls': 'turn:relay.metered.ca:80',
+            'urls': 'turn:openrelay.metered.ca:80',
             'username': 'openrelayproject',
             'credential': 'openrelayproject',
         },
         {
-            'urls': 'turn:relay.metered.ca:443',
+            'urls': 'turn:openrelay.metered.ca:443',
             'username': 'openrelayproject',
             'credential': 'openrelayproject',
         },
         {
-            'urls': 'turn:relay.metered.ca:443?transport=tcp',
+            'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
             'username': 'openrelayproject',
             'credential': 'openrelayproject',
         },
         {
-            'urls': 'turns:relay.metered.ca:443?transport=tcp',
+            'urls': 'turns:openrelay.metered.ca:443?transport=tcp',
             'username': 'openrelayproject',
             'credential': 'openrelayproject',
         },
@@ -188,11 +215,16 @@ def _build_webrtc_ice_servers():
     return stun_defaults + dedup_turn_servers
 
 
+def _resolve_ice_transport_policy():
+    configured = (os.environ.get('ICE_TRANSPORT_POLICY') or os.environ.get('REACT_APP_ICE_TRANSPORT_POLICY') or '').strip().lower()
+    return 'relay' if configured == 'relay' else 'all'
+
+
 @app.get('/api/webrtc-config')
 def webrtc_config():
     return jsonify({
         'iceServers': _build_webrtc_ice_servers(),
-        'iceTransportPolicy': 'all',
+        'iceTransportPolicy': _resolve_ice_transport_policy(),
     })
 
 db.init_app(app)
@@ -557,7 +589,11 @@ def _normalize_action_items(raw_items, fallback_summary=''):
 
 def ensure_legacy_schema():
     """补齐旧版 SQLite 数据库缺失字段，避免升级后登录/注册报错。"""
-    db_path = os.path.join(basedir, 'database.db')
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if not db_uri.startswith('sqlite:///'):
+        return
+
+    db_path = db_uri.replace('sqlite:///', '', 1)
     if not os.path.exists(db_path):
         return
 
@@ -590,9 +626,11 @@ with app.app_context():
         print("数据库初始化出错：", e)
         # sqlite 常见的损坏问题，尝试删除文件并重新创建
         if 'disk image is malformed' in str(e):
-            db_path = os.path.join(basedir, 'database.db')
+            db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+            db_path = db_uri.replace('sqlite:///', '', 1) if db_uri.startswith('sqlite:///') else ''
             try:
-                os.remove(db_path)
+                if db_path:
+                    os.remove(db_path)
                 print("损坏的数据库已删除，重新创建中…")
                 db.create_all()
                 print("数据库已重新创建。")

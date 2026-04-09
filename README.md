@@ -165,6 +165,12 @@ https://calendar-frontend.vercel.app,https://www.your-domain.com
 3. Render 启动失败：确认 Start Command 使用了 `--bind 0.0.0.0:$PORT`。
 4. Vercel 刷新页面 404：确认 `frontend/vercel.json` 已存在并已生效。
 
+5. 同局域网可用、跨网不可用：
+   - 确认后端是公网可访问地址（不能是 `localhost` / `127.0.0.1` / 局域网 IP）。
+   - 前端生产环境务必设置：`REACT_APP_API_BASE_URL=https://你的后端域名/api`
+   - 会议室跨网视频建议配置自有 TURN：`TURN_URL`、`TURN_USERNAME`、`TURN_CREDENTIAL`
+   - 若跨网仍无法建立视频通道，可在后端加：`ICE_TRANSPORT_POLICY=relay`（强制走 TURN 中继）
+
 如需 GitHub Pages 部署前端，仍可使用以下命令：
 
 ```bash

@@ -3,7 +3,26 @@ import axios from 'axios';
 // 配置axios默认设置
 const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const envBaseURL = (process.env.REACT_APP_API_BASE_URL || '').trim();
-const defaultBaseURL = isLocalhost ? 'http://localhost:5000/api' : '/api';
+
+const isPrivateIpv4Host = (hostname) => {
+	const parts = String(hostname || '').split('.').map((item) => Number(item));
+	if (parts.length !== 4 || parts.some((num) => Number.isNaN(num) || num < 0 || num > 255)) {
+		return false;
+	}
+
+	if (parts[0] === 10) return true;
+	if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+	if (parts[0] === 192 && parts[1] === 168) return true;
+	return false;
+};
+
+const shouldUseLocalBackendPort =
+	isLocalhost ||
+	(window.location.port === '3000' && isPrivateIpv4Host(window.location.hostname));
+
+const defaultBaseURL = shouldUseLocalBackendPort
+	? `${window.location.protocol}//${window.location.hostname}:5000/api`
+	: '/api';
 // 使用环境变量中的 API 基础 URL，确保前端能正确连接到后端
 axios.defaults.baseURL = envBaseURL || defaultBaseURL;
 axios.defaults.withCredentials = true; // 允许发送cookies

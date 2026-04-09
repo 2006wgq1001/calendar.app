@@ -46,6 +46,9 @@ const resolveSignalUrl = () => {
 
 const SIGNAL_URL = resolveSignalUrl();
 const SOCKET_IO_PATH = (process.env.REACT_APP_SOCKET_PATH || '/socket.io').trim() || '/socket.io';
+const DEFAULT_ICE_TRANSPORT_POLICY = ((process.env.REACT_APP_ICE_TRANSPORT_POLICY || 'all').trim().toLowerCase() === 'relay')
+  ? 'relay'
+  : 'all';
 
 const DEFAULT_RTC_ICE_SERVERS = (() => {
   const stunDefaults = [
@@ -58,12 +61,22 @@ const DEFAULT_RTC_ICE_SERVERS = (() => {
 
   const fallbackTurnServers = [
     {
-      urls: 'turn:relay.metered.ca:80',
+      urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
     {
-      urls: 'turn:relay.metered.ca:443',
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turns:openrelay.metered.ca:443?transport=tcp',
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
@@ -147,6 +160,7 @@ const MeetingRoom = ({ user }) => {
   const rtcConfigLoadedRef = useRef(false);
   const rtcConfigPromiseRef = useRef(null);
   const rtcIceServersRef = useRef(DEFAULT_RTC_ICE_SERVERS);
+  const rtcIceTransportPolicyRef = useRef(DEFAULT_ICE_TRANSPORT_POLICY);
   const remoteStreamsRef = useRef({});
   const disconnectTimerRef = useRef({});
   const hostSocketIdRef = useRef('');
@@ -465,7 +479,11 @@ const MeetingRoom = ({ user }) => {
           const nextIceServers = Array.isArray(response?.data?.iceServers) && response.data.iceServers.length > 0
             ? response.data.iceServers
             : DEFAULT_RTC_ICE_SERVERS;
+          const nextIceTransportPolicy = String(response?.data?.iceTransportPolicy || '').trim().toLowerCase() === 'relay'
+            ? 'relay'
+            : DEFAULT_ICE_TRANSPORT_POLICY;
           rtcIceServersRef.current = nextIceServers;
+          rtcIceTransportPolicyRef.current = nextIceTransportPolicy;
           rtcConfigLoadedRef.current = true;
           return nextIceServers;
         })
@@ -473,6 +491,7 @@ const MeetingRoom = ({ user }) => {
           console.error('Load WebRTC config failed:', error);
           rtcConfigLoadedRef.current = true;
           rtcIceServersRef.current = DEFAULT_RTC_ICE_SERVERS;
+          rtcIceTransportPolicyRef.current = DEFAULT_ICE_TRANSPORT_POLICY;
           return DEFAULT_RTC_ICE_SERVERS;
         });
     }
@@ -505,6 +524,7 @@ const MeetingRoom = ({ user }) => {
 
     const peer = new RTCPeerConnection({
       iceServers: rtcIceServersRef.current,
+      iceTransportPolicy: rtcIceTransportPolicyRef.current,
     });
 
     // 添加所有轨道
